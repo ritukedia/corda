@@ -30,7 +30,8 @@ class Party(val name: String, val owningKey: CompositeKey) {
     override fun equals(other: Any?): Boolean = other is Party && this.owningKey == other.owningKey
     override fun hashCode(): Int = owningKey.hashCode()
     override fun toString() = name
+    fun toState() = StateParty(owningKey, this)
 
-    fun ref(bytes: OpaqueBytes) = PartyAndReference(this, bytes)
+    fun ref(bytes: OpaqueBytes) = PartyAndReference(this.toState(), bytes)
     fun ref(vararg bytes: Byte) = ref(OpaqueBytes.of(*bytes))
 }
