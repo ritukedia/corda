@@ -1,36 +1,59 @@
 package net.corda.node.services.vault.schemas
 
 import io.requery.*
+import net.corda.core.schemas.Requery
+import net.corda.core.schemas.requery.converters.InstantConverter
 import java.time.Instant
-import java.time.LocalDateTime
 import java.util.*
 
 object VaultSchema {
 
-    @Table(name = "vault_consumed_states")
+    @Table(name = "vault_states")
+//    @Entity(model = "vault")
     @Entity
-    interface VaultConsumedState : Persistable {
-        @get:Key
-        @get:Column(length = 64)
-        var tx_id: String
-        @get:Key
-        var output_index: Int
+    interface VaultStates : Requery.PersistentState {
 
+        @get:Column(name = "notary_name")
+        var notaryName: String
+
+        // references a concrete ContractState that is [QueryableState] and has a [MappedSchema]
+        @get:Column(name = "contract_state_class_name")
         var contractStateClassName: String
+
+        // references a concrete ContractState that is [QueryableState] and has a [MappedSchema] version
+        @get:Column(name = "contract_state_class_version")
         var contractStateClassVersion: Int
 
-        var validFrom: LocalDateTime
-        var validTo: Instant
+        @get:Column(name = "state_status")
+        var stateStatus: StateStatus
+
+        // refers to timestamp recorded upon entering AWAITING_CONSENSUS state
+        @get:Column(name = "committed")
+        @get:Convert(InstantConverter::class)
+        var committed: Instant
+
+        // refers to timestamp recorded upon entering CONSENSUS_AGREED_UNCONSUMED state
+        @get:Column(name = "notarised")
+        @get:Convert(InstantConverter::class)
+        var notarised: Instant
+
+        // refers to timestamp recorded upon entering CONSENSUS_AGREED_CONSUMED state
+        @get:Column(name = "consumed")
+        @get:Convert(InstantConverter::class)
+        var consumed: Instant
+
+        @get:Column(name = "lock_id", nullable = true)
+        var lockId: String
+    }
+
+    enum class StateStatus {
+        AWAITING_CONSENSUS, CONSENSUS_AGREED_UNCONSUMED, CONSENSUS_AGREED_CONSUMED
     }
 
     @Table(name = "vault_consumed_fungible_states")
+//    @Entity(model = "vault")
     @Entity
-    interface VaultFungibleState : Persistable {
-        @get:Key
-        @get:Column(length = 64)
-        var tx_id: String
-        @get:Key
-        var output_index: Int
+    interface VaultFungibleState : Requery.PersistentState {
 
         @get:OneToMany(mappedBy = "key")
         var participants: VaultKey
@@ -50,13 +73,9 @@ object VaultSchema {
     }
 
     @Table(name = "vault_consumed_linear_states")
+//    @Entity(model = "vault")
     @Entity
-    interface VaultLinearState : Persistable {
-        @get:Key
-        @get:Column(length = 64)
-        var tx_id: String
-        @get:Key
-        var output_index: Int
+    interface VaultLinearState : Requery.PersistentState {
 
         @get:OneToMany(mappedBy = "key")
         var participants: VaultKey
@@ -75,6 +94,7 @@ object VaultSchema {
     }
 
     @Table(name = "vault_keys")
+//    @Entity(model = "vault")
     @Entity
     interface VaultKey : Persistable {
         @get:Key
@@ -88,6 +108,7 @@ object VaultSchema {
     }
 
     @Table(name = "vault_parties")
+//    @Entity(model = "vault")
     @Entity
     interface VaultParty : Persistable {
         @get:Key
