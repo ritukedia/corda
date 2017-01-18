@@ -36,10 +36,6 @@ sourceSets {
     }
 }
 
-kapt {
-    generateStubs = true
-}
-
 dependencies {
 
     testCompile "junit:junit:$junit_version"
