@@ -65,8 +65,8 @@ dependencies {
     testCompile project(':client')
 
     // requery
-    compile 'io.requery:requery-kotlin:1.1.0'
-//    kapt 'io.requery:requery-processor:1.1.0'
+    compile "io.requery:requery-kotlin:$requery_version"
+    kapt "io.requery:requery-processor:$requery_version"
 
     compile "com.google.code.findbugs:jsr305:3.0.1"
 
