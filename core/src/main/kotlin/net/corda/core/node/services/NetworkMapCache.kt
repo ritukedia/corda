@@ -87,7 +87,7 @@ interface NetworkMapCache {
     fun getPartyInfo(party: Party): PartyInfo?
 
     /** Gets a notary identity by the given name. */
-    fun getNotary(name: String): Party? {
+    fun getNotary(name: String): Party.Full? {
         val notaryNode = notaryNodes.randomOrNull {
             it.advertisedServices.any { it.info.type.isSubTypeOf(ServiceType.notary) && it.info.name == name }
         }
@@ -98,7 +98,7 @@ interface NetworkMapCache {
      * Returns a notary identity advertised by any of the nodes on the network (chosen at random)
      * @param type Limits the result to notaries of the specified type (optional)
      */
-    fun getAnyNotary(type: ServiceType? = null): Party? {
+    fun getAnyNotary(type: ServiceType? = null): Party.Full? {
         val nodes = if (type == null) {
             notaryNodes
         } else {

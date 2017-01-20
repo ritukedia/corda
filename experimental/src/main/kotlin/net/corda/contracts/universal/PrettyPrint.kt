@@ -44,7 +44,7 @@ private class PrettyPrint(arr : Arrangement) {
     val partyMap = mutableMapOf<CompositeKey, String>()
     val usedPartyNames = mutableSetOf<String>()
 
-    fun createPartyName(party : Party) : String
+    fun createPartyName(party : Party.Full) : String
     {
         val parts = party.name.toLowerCase().split(' ')
 
@@ -64,7 +64,7 @@ private class PrettyPrint(arr : Arrangement) {
 
     init {
         parties.forEach {
-            println( "val ${createPartyName(it)} = Party(\"${it.name}\", \"${it.owningKey}\")" )
+            println( "val ${createPartyName(it)} = Party.Full(\"${it.name}\", \"${it.owningKey}\")" )
         }
     }
 

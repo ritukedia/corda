@@ -6,7 +6,6 @@ import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.filterStatesOfType
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
-import net.corda.core.crypto.StateParty
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.messaging.startFlow
 import net.corda.vega.analytics.InitialMarginTriple
@@ -33,7 +32,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     private val ownParty: Party get() = rpc.nodeIdentity().legalIdentity
     private val portfolioUtils = PortfolioApiUtils(ownParty)
 
-    private inline fun <reified T : DealState> dealsWith(party: StateParty): List<StateAndRef<T>> {
+    private inline fun <reified T : DealState> dealsWith(party: Party.Anonymised): List<StateAndRef<T>> {
         return rpc.vaultAndUpdates().first.filterStatesOfType<T>().filter { it.state.data.parties.any { it == party } }
     }
 
@@ -54,7 +53,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
      * DSL to get a portfolio and then executing the passed function with the portfolio as a parameter.
      * Used as such: withPortfolio(party) { doSomethingWith(it) }
      */
-    private fun withPortfolio(party: StateParty, func: (PortfolioState) -> Response): Response {
+    private fun withPortfolio(party: Party.Anonymised, func: (PortfolioState) -> Response): Response {
         val portfolio = getPortfolioWith(party)
         return if (portfolio != null) {
             func(portfolio)
@@ -66,12 +65,12 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     /**
      * Gets all existing IRSStates with the party provided.
      */
-    private fun getTradesWith(party: StateParty) = dealsWith<IRSState>(party)
+    private fun getTradesWith(party: Party.Anonymised) = dealsWith<IRSState>(party)
 
     /**
      * Gets the most recent portfolio state, or null if not extant, with the party provided.
      */
-    private fun getPortfolioWith(party: StateParty): PortfolioState? {
+    private fun getPortfolioWith(party: Party.Anonymised): PortfolioState? {
         val portfolios = dealsWith<PortfolioState>(party)
         // Can have at most one between any two parties with the current no split portfolio model
         require(portfolios.size < 2) { "This API currently only supports one portfolio with a counterparty" }
@@ -83,7 +82,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
      *
      * @warning Do not call if you have not agreed a portfolio with the other party.
      */
-    private fun getPortfolioStateAndRefWith(party: StateParty): StateAndRef<PortfolioState> {
+    private fun getPortfolioStateAndRefWith(party: Party.Anonymised): StateAndRef<PortfolioState> {
         val portfolios = dealsWith<PortfolioState>(party)
         // Can have at most one between any two parties with the current no split portfolio model
         require(portfolios.size < 2) { "This API currently only supports one portfolio with a counterparty" }
@@ -267,16 +266,16 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     @Produces(MediaType.APPLICATION_JSON)
     fun startPortfolioCalculations(params: ValuationCreationParams = ValuationCreationParams(LocalDate.of(2016, 6, 6)), @PathParam("party") partyName: String): Response {
         return withParty(partyName) { otherParty ->
-            val otherStateParty = otherParty.toState()
-            val existingSwap = getPortfolioWith(otherStateParty)
+            val otherParty.Anonymised = otherParty.toState()
+            val existingSwap = getPortfolioWith(otherParty.Anonymised)
             if (existingSwap == null) {
                 rpc.startFlow(SimmFlow::Requester, otherParty, params.valuationDate).returnValue.toBlocking().first()
             } else {
-                val handle = rpc.startFlow(SimmRevaluation::Initiator, getPortfolioStateAndRefWith(otherStateParty).ref, params.valuationDate)
+                val handle = rpc.startFlow(SimmRevaluation::Initiator, getPortfolioStateAndRefWith(otherParty.Anonymised).ref, params.valuationDate)
                 handle.returnValue.toBlocking().first()
             }
 
-            withPortfolio(otherStateParty) { portfolioState ->
+            withPortfolio(otherParty.Anonymised) { portfolioState ->
                 val portfolio = portfolioState.portfolio.toStateAndRef<IRSState>(rpc).toPortfolio()
                 Response.ok().entity(portfolioUtils.createValuations(portfolioState, portfolio)).build()
             }

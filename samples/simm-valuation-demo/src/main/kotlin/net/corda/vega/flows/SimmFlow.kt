@@ -13,7 +13,6 @@ import com.opengamma.strata.pricer.swap.DiscountingSwapProductPricer
 import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.StateRef
 import net.corda.core.crypto.Party
-import net.corda.core.crypto.StateParty
 import net.corda.core.flows.FlowLogic
 import net.corda.core.messaging.Ack
 import net.corda.core.node.PluginServiceHub
@@ -213,7 +212,7 @@ object SimmFlow {
         }
 
         @Suspendable
-        private fun agreeValuation(portfolio: Portfolio, asOf: LocalDate, valuer: StateParty): PortfolioValuation {
+        private fun agreeValuation(portfolio: Portfolio, asOf: LocalDate, valuer: Party.Anonymised): PortfolioValuation {
             val valuerParty = valuer.resolveParty(serviceHub.identityService)
             require(valuerParty != null)
             return agreeValuation(portfolio, asOf, valuerParty!!)

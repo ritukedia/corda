@@ -4,7 +4,6 @@ import co.paralleluniverse.fibers.Suspendable
 import net.corda.contracts.asset.Cash
 import net.corda.core.contracts.*
 import net.corda.core.crypto.Party
-import net.corda.core.crypto.StateParty
 import net.corda.core.crypto.keys
 import net.corda.core.crypto.toStringShort
 import net.corda.core.flows.FlowLogic
@@ -46,8 +45,8 @@ class CashFlow(val command: CashCommand, override val progressTracker: ProgressT
     private fun initiatePayment(req: CashCommand.PayCash): CashFlowResult {
         progressTracker.currentStep = PAYING
         val builder: TransactionBuilder = TransactionType.General.Builder(null)
-        val recipient = req.recipient.resolveParty(serviceHub.identityService) ?: return CashFlowResult.Failed("Unknown recipient party")
-        val issuer = req.amount.token.issuer.party.resolveParty(serviceHub.identityService) ?: return CashFlowResult.Failed("Unknown issuing party")
+        val recipient = serviceHub.identityService.deanonymiseParty(req.recipient) ?: return CashFlowResult.Failed("Unknown recipient party")
+        val issuer = serviceHub.identityService.deanonymiseParty(req.amount.token.issuer) ?: return CashFlowResult.Failed("Unknown issuing party")
         // TODO: Have some way of restricting this to states the caller controls
         try {
             val (spendTX, keysForSigning) = serviceHub.vaultService.generateSpend(builder,
@@ -112,7 +111,7 @@ class CashFlow(val command: CashCommand, override val progressTracker: ProgressT
         progressTracker.currentStep = ISSUING
         val builder: TransactionBuilder = TransactionType.General.Builder(notary = null)
         val issuer = PartyAndReference(serviceHub.myInfo.legalIdentity.toState(), req.issueRef)
-        val recipient = req.recipient.resolveParty(serviceHub.identityService) ?: return CashFlowResult.Failed("Unknown recipient party")
+        val recipient = serviceHub.identityService.deanonymiseParty(req.recipient) ?: return CashFlowResult.Failed("Unknown recipient party")
         Cash().generateIssue(builder, req.amount.issuedBy(issuer), req.recipient.owningKey, req.notary)
         val myKey = serviceHub.legalIdentityKey
         builder.signWith(myKey)
@@ -142,12 +141,12 @@ sealed class CashCommand {
      */
     class IssueCash(val amount: Amount<Currency>,
                     val issueRef: OpaqueBytes,
-                    val recipient: StateParty,
-                    val notary: Party) : CashCommand() {
+                    val recipient: Party.Anonymised,
+                    val notary: Party.Full) : CashCommand() {
         constructor(amount: Amount<Currency>,
                     issueRef: OpaqueBytes,
                     recipient: Party,
-                    notary: Party) : this(amount, issueRef, recipient.toState(), notary)
+                    notary: Party.Full) : this(amount, issueRef, recipient.toState(), notary)
     }
 
     /**
@@ -156,8 +155,8 @@ sealed class CashCommand {
      * @param amount the amount of currency to issue on to the ledger.
      * @param recipient the party to issue the cash to.
      */
-    class PayCash(val amount: Amount<Issued<Currency>>, val recipient: StateParty) : CashCommand() {
-        constructor(amount: Amount<Issued<Currency>>, recipient: Party) : this(amount, recipient.toState())
+    class PayCash(val amount: Amount<Issued<Currency>>, val recipient: Party.Anonymised) : CashCommand() {
+        constructor(amount: Amount<Issued<Currency>>, recipient: Party.Full) : this(amount, recipient.toState())
     }
 
     /**
