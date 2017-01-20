@@ -1,14 +1,41 @@
 package net.corda.node.services.vault.schemas
 
 import io.requery.*
-import net.corda.core.schemas.Requery
 import net.corda.core.schemas.requery.converters.InstantConverter
 import java.time.Instant
 import java.util.*
 
 object VaultSchema {
 
-    @Table(name = "vault_states")
+    @Table(name = "vault_transaction_notes")
+    @Entity
+    interface VaultTxnNote : Persistable {
+
+        @get:Key
+        @get:Generated
+        @get:Column(name = "seq_no", index = true)
+        var seqNo: Integer
+
+//        @get:Index
+        @get:Column(name = "transaction_id", length = 64, index = true)
+        var txId: String
+
+        @get:Column(name = "note")
+        var note: String
+    }
+
+    @Table(name = "vault_cash_balances")
+    @Entity
+    interface VaultCashBalances : Persistable {
+        @get:Key
+        @get:Column(name = "currency_code", length = 3)
+        var currency: String
+
+        @get:Column(name = "amount", value = "0")
+        var amount: Long
+    }
+
+     @Table(name = "vault_states")
 //    @Entity(model = "vault")
     @Entity
     interface VaultStates : Requery.PersistentState {
@@ -52,7 +79,7 @@ object VaultSchema {
 
     @Table(name = "vault_consumed_fungible_states")
 //    @Entity(model = "vault")
-    @Entity
+//    @Entity
     interface VaultFungibleState : Requery.PersistentState {
 
         @get:OneToMany(mappedBy = "key")
@@ -74,7 +101,7 @@ object VaultSchema {
 
     @Table(name = "vault_consumed_linear_states")
 //    @Entity(model = "vault")
-    @Entity
+//    @Entity
     interface VaultLinearState : Requery.PersistentState {
 
         @get:OneToMany(mappedBy = "key")
@@ -95,7 +122,7 @@ object VaultSchema {
 
     @Table(name = "vault_keys")
 //    @Entity(model = "vault")
-    @Entity
+//    @Entity
     interface VaultKey : Persistable {
         @get:Key
         @get:Generated
@@ -109,7 +136,7 @@ object VaultSchema {
 
     @Table(name = "vault_parties")
 //    @Entity(model = "vault")
-    @Entity
+//    @Entity
     interface VaultParty : Persistable {
         @get:Key
         @get:Generated

@@ -1,6 +1,6 @@
 package net.corda.core.schemas.requery.converters
 
-import io.requery.*
+import io.requery.Converter
 
 import java.sql.*
 import java.time.*

@@ -3,20 +3,16 @@ package com.r3corda.node.services.database
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.requery.Persistable
+import io.requery.meta.EntityModel
 import io.requery.sql.KotlinConfiguration
 import io.requery.sql.KotlinEntityDataStore
 import io.requery.sql.SchemaModifier
 import io.requery.sql.TableCreationMode
-import net.corda.core.crypto.SecureHash
-import net.corda.core.schemas.MappedSchema
 import net.corda.core.utilities.loggerFor
-import net.corda.node.services.api.SchemaService
-import net.corda.schemas.Models
-import org.h2.jdbcx.JdbcDataSource
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
-class RequeryConfiguration(val schemaService: SchemaService) {
+class RequeryConfiguration() {
 
     // TODO:
     // 1. schemaService schemaOptions needs to be applied: eg. default schema, table prefix
@@ -26,27 +22,23 @@ class RequeryConfiguration(val schemaService: SchemaService) {
 
     val config = HikariConfig(configureDataSourceProperties())
     val dataSource = HikariDataSource(config)
-    val configuration = KotlinConfiguration(dataSource = dataSource,
-                                            model = Models.SCHEMAS,
-                                            useDefaultLogging = true)
-    init {
-        val tables = SchemaModifier(configuration)
-        val mode = TableCreationMode.DROP_CREATE
-        tables.createTables(mode)
-    }
 
     companion object {
         val logger = loggerFor<RequeryConfiguration>()
     }
 
     // TODO: make this a guava cache or similar to limit ability for this to grow forever.
-    private val sessionFactories = ConcurrentHashMap<MappedSchema, KotlinEntityDataStore<Persistable>>()
+    private val sessionFactories = ConcurrentHashMap<EntityModel, KotlinEntityDataStore<Persistable>>()
 
-    fun sessionForSchema(schema: MappedSchema): KotlinEntityDataStore<Persistable> {
-        return sessionFactories.computeIfAbsent(schema, { makeSessionFactoryForSchema(it) })
+    fun sessionForModel(model: EntityModel): KotlinEntityDataStore<Persistable> {
+        return sessionFactories.computeIfAbsent(model, { makeSessionFactoryForModel(it) })
     }
 
-    protected fun makeSessionFactoryForSchema(schema: MappedSchema): KotlinEntityDataStore<Persistable> {
+    fun makeSessionFactoryForModel(model: EntityModel): KotlinEntityDataStore<Persistable> {
+        val configuration = KotlinConfiguration(model, dataSource, useDefaultLogging = true)
+        val tables = SchemaModifier(configuration)
+        val mode = TableCreationMode.CREATE_NOT_EXISTS
+        tables.createTables(mode)
         return KotlinEntityDataStore<Persistable>(configuration)
     }
 
@@ -58,7 +50,7 @@ class RequeryConfiguration(val schemaService: SchemaService) {
     private fun configureDataSourceProperties(): Properties {
         val props = Properties()
         props.setProperty("dataSourceClassName", "org.h2.jdbcx.JdbcDataSource")
-        props.setProperty("dataSource.url", "jdbc:h2:mem:corda;DB_CLOSE_ON_EXIT=FALSE")
+        props.setProperty("dataSource.url", "jdbc:h2:mem:corda;TRACE_LEVEL_SYSTEM_OUT=2;DB_CLOSE_ON_EXIT=FALSE")
         props.setProperty("dataSource.user", "sa")
         props.setProperty("dataSource.password", "")
         return props

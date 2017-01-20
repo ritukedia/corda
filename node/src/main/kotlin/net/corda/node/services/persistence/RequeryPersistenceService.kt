@@ -8,6 +8,7 @@ import net.corda.core.schemas.QueryableState
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.api.SchemaService
 import net.corda.node.services.persistence.AbstractPersistenceServiceImpl
+import net.corda.node.services.vault.schemas.Models
 
 /**
  * A general purpose service for Object Relational Mappings that are persisted with Requery.
@@ -15,7 +16,7 @@ import net.corda.node.services.persistence.AbstractPersistenceServiceImpl
 // TODO: Manage version evolution of the schemas via additional tooling.
 class RequeryPersistenceService(override val schemaService: SchemaService) : AbstractPersistenceServiceImpl(schemaService) {
 
-    private val configuration = RequeryConfiguration(schemaService)
+    private val configuration = RequeryConfiguration()
 
     companion object {
         val logger = loggerFor<RequeryPersistenceService>()
@@ -23,7 +24,7 @@ class RequeryPersistenceService(override val schemaService: SchemaService) : Abs
 
     override fun persistStateWithSchema(state: QueryableState, stateRef: StateRef, schema: MappedSchema) {
 
-        val session = configuration.sessionForSchema(schema)
+        val session = configuration.sessionForModel(Models.DEFAULT)
 
         session.invoke {
             val mappedObject = schemaService.generateMappedObject(state, schema)

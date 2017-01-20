@@ -1,6 +1,7 @@
 package net.corda.node.services.vault
 
 import com.google.common.collect.Sets
+import com.r3corda.node.services.database.RequeryConfiguration
 import net.corda.contracts.asset.Cash
 import net.corda.core.ThreadBox
 import net.corda.core.bufferUntilSubscribed
@@ -17,6 +18,7 @@ import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.transactions.WireTransaction
 import net.corda.core.utilities.loggerFor
 import net.corda.core.utilities.trace
+import net.corda.node.services.vault.schemas.*
 import net.corda.node.utilities.*
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.select
@@ -24,6 +26,7 @@ import org.jetbrains.exposed.sql.statements.InsertStatement
 import rx.Observable
 import rx.subjects.PublishSubject
 import java.security.PublicKey
+import java.time.Instant
 import java.util.*
 
 /**
@@ -42,6 +45,9 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
     private companion object {
         val log = loggerFor<NodeVaultService>()
     }
+
+    val configuration = RequeryConfiguration()
+    val session = configuration.sessionForModel(Models.DEFAULT)
 
     private object StatesSetTable : JDBCHashedTable("${NODE_DATABASE_PREFIX}vault_unconsumed_states") {
         val stateRef = stateRef("transaction_id", "output_index")
@@ -117,10 +123,38 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         fun recordUpdate(update: Vault.Update): Vault.Update {
             if (update != Vault.NoUpdate) {
                 val producedStateRefs = update.produced.map { it.ref }
+                val producedStateRefsMap = update.produced.associateBy { it.ref }
+
                 val consumedStateRefs = update.consumed.map { it.ref }
                 log.trace { "Removing $consumedStateRefs consumed contract states and adding $producedStateRefs produced contract states to the database." }
                 unconsumedStates.removeAll(consumedStateRefs)
                 unconsumedStates.addAll(producedStateRefs)
+
+                // requery persistence
+                session.withTransaction {
+                    producedStateRefsMap.forEach { it ->
+                        val state = VaultStatesEntity()
+                        state.txId = it.key.txhash.toString()
+                        state.index = it.key.index
+                        state.stateStatus = VaultSchema.StateStatus.CONSENSUS_AGREED_UNCONSUMED
+                        state.contractStateClassName = it.value.state.data.toString()
+                        //state.contractStateClassVersion = it.value.state.data.version
+                        state.notaryName = it.value.state.notary.name
+                        state.notarised = Instant.now()
+                        insert(state)
+                    }
+                    consumedStateRefs.forEach { stateRef ->
+                        val keys = mapOf(VaultStatesEntity.TX_ID to VaultStatesEntity.TX_ID.defaultValue,
+                                         VaultStatesEntity.INDEX to VaultStatesEntity.INDEX.defaultValue)
+                        val key = io.requery.proxy.CompositeKey(keys)
+                        val state = findByKey(VaultStatesEntity::class, key)
+                        state?.let {
+                            state.stateStatus = VaultSchema.StateStatus.CONSENSUS_AGREED_CONSUMED
+                            state.consumed = Instant.now()
+                            update(state)
+                        }
+                    }
+                }
             }
             return update
         }
@@ -135,6 +169,17 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
                     val consumedAmount = consumed[currency] ?: Amount(0, currency)
                     val currentBalance = cashBalances[currency] ?: Amount(0, currency)
                     cashBalances[currency] = currentBalance + producedAmount - consumedAmount
+
+                    val cashBalanceEntity = VaultCashBalancesEntity()
+                    cashBalanceEntity.currency = currency.currencyCode
+
+                    session.invoke {
+                        val state = findByKey(VaultCashBalancesEntity::class, currency)
+                        state?.let {
+                            state.amount += producedAmount.quantity - consumedAmount.quantity
+                        }
+                        upsert(state ?: cashBalanceEntity)
+                    }
                 }
             }
         }
@@ -184,15 +229,24 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
     }
 
     override fun addNoteToTransaction(txnId: SecureHash, noteText: String) {
-        mutex.locked {
-            transactionNotes.add(TxnNote(txnId, noteText))
+        session.invoke {
+            val txnNoteEntity = VaultTxnNoteEntity()
+            txnNoteEntity.txId = txnId.toString()
+            txnNoteEntity.note = noteText
+            insert(txnNoteEntity)
         }
     }
 
     override fun getTransactionNotes(txnId: SecureHash): Iterable<String> {
-        mutex.locked {
-            return transactionNotes.select(txnId)
-        }
+        val result =
+            session.invoke {
+//                val state = findByKey(VaultTxnNoteEntity::class, txnId)
+                val result = select(VaultSchema.VaultTxnNote::class) //where (VaultSchema.VaultTxnNote::txId eq txnNoteEntity.txId)
+                result?.let {
+                    result.get().asIterable().map { it.note }
+                }
+            }
+        return result ?: emptyList()
     }
 
     /**

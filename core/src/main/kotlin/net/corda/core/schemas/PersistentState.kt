@@ -1,6 +1,10 @@
-package net.corda.core.schemas
+package net.corda.node.services.vault.schemas
 
-import io.requery.*
+import io.requery.Key
+import io.requery.Persistable
+import io.requery.Superclass
+
+import javax.persistence.Column
 
 object Requery {
     /**
