@@ -26,6 +26,7 @@ import net.corda.testing.node.setTo
 import rx.Observable
 import rx.subjects.PublishSubject
 import java.security.KeyPair
+import java.security.KeyPairGeneratorSpi
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -50,8 +51,8 @@ abstract class Simulation(val networkSendManuallyPumped: Boolean,
     // This puts together a mock network of SimulatedNodes.
 
     open class SimulatedNode(config: NodeConfiguration, mockNet: MockNetwork, networkMapAddress: SingleMessageRecipient?,
-                             advertisedServices: Set<ServiceInfo>, id: Int, keyPair: KeyPair?)
-        : MockNetwork.MockNode(config, mockNet, networkMapAddress, advertisedServices, id, keyPair) {
+                             advertisedServices: Set<ServiceInfo>, id: Int, overrideServices: Map<ServiceInfo, KeyPair>?, keyPairGenerator: KeyPairGeneratorSpi)
+        : MockNetwork.MockNode(config, mockNet, networkMapAddress, advertisedServices, id, overrideServices, keyPairGenerator) {
         override fun findMyLocation(): PhysicalLocation? = CityDatabase[configuration.nearestCity]
     }
 
@@ -59,7 +60,8 @@ abstract class Simulation(val networkSendManuallyPumped: Boolean,
         var counter = 0
 
         override fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
-                            advertisedServices: Set<ServiceInfo>, id: Int, keyPair: KeyPair?): MockNetwork.MockNode {
+                            advertisedServices: Set<ServiceInfo>, id: Int, overrideServices: Map<ServiceInfo, KeyPair>?,
+                            keyPairGenerator: KeyPairGeneratorSpi): MockNetwork.MockNode {
             val letter = 'A' + counter
             val city = bankLocations[counter++ % bankLocations.size]
 
@@ -69,12 +71,12 @@ abstract class Simulation(val networkSendManuallyPumped: Boolean,
                     myLegalName = "Bank $letter",
                     nearestCity = city,
                     networkMapService = null)
-            return SimulatedNode(cfg, network, networkMapAddr, advertisedServices, id, keyPair)
+            return SimulatedNode(cfg, network, networkMapAddr, advertisedServices, id, overrideServices, keyPairGenerator)
         }
 
         fun createAll(): List<SimulatedNode> {
             return bankLocations.map {
-                network.createNode(networkMap.info.address, start = false, nodeFactory = this, keyPair = generateKeyPair()) as SimulatedNode
+                network.createNode(networkMap.info.address, start = false, nodeFactory = this) as SimulatedNode
             }
         }
     }
@@ -82,41 +84,44 @@ abstract class Simulation(val networkSendManuallyPumped: Boolean,
     val bankFactory = BankFactory()
 
     object NetworkMapNodeFactory : MockNetwork.Factory {
-        override fun create(config: NodeConfiguration, network: MockNetwork,
-                            networkMapAddr: SingleMessageRecipient?, advertisedServices: Set<ServiceInfo>, id: Int, keyPair: KeyPair?): MockNetwork.MockNode {
+        override fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
+                            advertisedServices: Set<ServiceInfo>, id: Int, overrideServices: Map<ServiceInfo, KeyPair>?,
+                            keyPairGenerator: KeyPairGeneratorSpi): MockNetwork.MockNode {
             require(advertisedServices.containsType(NetworkMapService.type))
             val cfg = TestNodeConfiguration(
                     baseDirectory = config.baseDirectory,
                     myLegalName = "Network coordination center",
                     nearestCity = "Amsterdam",
                     networkMapService = null)
-            return object : SimulatedNode(cfg, network, networkMapAddr, advertisedServices, id, keyPair) {}
+            return object : SimulatedNode(cfg, network, networkMapAddr, advertisedServices, id, overrideServices, keyPairGenerator) {}
         }
     }
 
     object NotaryNodeFactory : MockNetwork.Factory {
         override fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
-                            advertisedServices: Set<ServiceInfo>, id: Int, keyPair: KeyPair?): MockNetwork.MockNode {
+                            advertisedServices: Set<ServiceInfo>, id: Int, overrideServices: Map<ServiceInfo, KeyPair>?,
+                            keyPairGenerator: KeyPairGeneratorSpi): MockNetwork.MockNode {
             require(advertisedServices.containsType(SimpleNotaryService.type))
             val cfg = TestNodeConfiguration(
                     baseDirectory = config.baseDirectory,
                     myLegalName = "Notary Service",
                     nearestCity = "Zurich",
                     networkMapService = null)
-            return SimulatedNode(cfg, network, networkMapAddr, advertisedServices, id, keyPair)
+            return SimulatedNode(cfg, network, networkMapAddr, advertisedServices, id, overrideServices, keyPairGenerator)
         }
     }
 
     object RatesOracleFactory : MockNetwork.Factory {
         override fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
-                            advertisedServices: Set<ServiceInfo>, id: Int, keyPair: KeyPair?): MockNetwork.MockNode {
+                            advertisedServices: Set<ServiceInfo>, id: Int, overrideServices: Map<ServiceInfo, KeyPair>?,
+                            keyPairGenerator: KeyPairGeneratorSpi): MockNetwork.MockNode {
             require(advertisedServices.containsType(NodeInterestRates.type))
             val cfg = TestNodeConfiguration(
                     baseDirectory = config.baseDirectory,
                     myLegalName = "Rates Service Provider",
                     nearestCity = "Madrid",
                     networkMapService = null)
-            return object : SimulatedNode(cfg, network, networkMapAddr, advertisedServices, id, keyPair) {
+            return object : SimulatedNode(cfg, network, networkMapAddr, advertisedServices, id, overrideServices, keyPairGenerator) {
                 override fun start(): MockNetwork.MockNode {
                     super.start()
                     javaClass.classLoader.getResourceAsStream("example.rates.txt").use {
@@ -132,13 +137,14 @@ abstract class Simulation(val networkSendManuallyPumped: Boolean,
 
     object RegulatorFactory : MockNetwork.Factory {
         override fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
-                            advertisedServices: Set<ServiceInfo>, id: Int, keyPair: KeyPair?): MockNetwork.MockNode {
+                            advertisedServices: Set<ServiceInfo>, id: Int, overrideServices: Map<ServiceInfo, KeyPair>?,
+                            keyPairGenerator: KeyPairGeneratorSpi): MockNetwork.MockNode {
             val cfg = TestNodeConfiguration(
                     baseDirectory = config.baseDirectory,
                     myLegalName = "Regulator A",
                     nearestCity = "Paris",
                     networkMapService = null)
-            return object : SimulatedNode(cfg, network, networkMapAddr, advertisedServices, id, keyPair) {
+            return object : SimulatedNode(cfg, network, networkMapAddr, advertisedServices, id, overrideServices, keyPairGenerator) {
                 // TODO: Regulatory nodes don't actually exist properly, this is a last minute demo request.
                 //       So we just fire a message at a node that doesn't know how to handle it, and it'll ignore it.
                 //       But that's fine for visualisation purposes.

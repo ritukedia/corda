@@ -14,11 +14,13 @@ import net.corda.node.services.network.NetworkMapService
 import net.corda.node.services.persistence.NodeAttachmentService
 import net.corda.node.services.transactions.SimpleNotaryService
 import net.corda.testing.node.MockNetwork
+import net.i2p.crypto.eddsa.KeyPairGenerator
 import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.security.KeyPair
+import java.security.KeyPairGeneratorSpi
 import java.util.jar.JarOutputStream
 import java.util.zip.ZipEntry
 import kotlin.test.assertEquals
@@ -84,8 +86,10 @@ class AttachmentTests {
         // Make a node that doesn't do sanity checking at load time.
         val n0 = network.createNode(null, -1, object : MockNetwork.Factory {
             override fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
-                                advertisedServices: Set<ServiceInfo>, id: Int, keyPair: KeyPair?): MockNetwork.MockNode {
-                return object : MockNetwork.MockNode(config, network, networkMapAddr, advertisedServices, id, keyPair) {
+                                advertisedServices: Set<ServiceInfo>, id: Int,
+                                overrideServices: Map<ServiceInfo, KeyPair>?,
+                                keyPairGenerator: KeyPairGeneratorSpi): MockNetwork.MockNode {
+                return object : MockNetwork.MockNode(config, network, networkMapAddr, advertisedServices, id, overrideServices, keyPairGenerator) {
                     override fun start(): MockNetwork.MockNode {
                         super.start()
                         (storage.attachments as NodeAttachmentService).checkAttachmentsOnLoad = false
@@ -93,7 +97,7 @@ class AttachmentTests {
                     }
                 }
             }
-        }, true, null, null, ServiceInfo(NetworkMapService.type), ServiceInfo(SimpleNotaryService.type))
+        }, true, null, null, KeyPairGenerator(), ServiceInfo(NetworkMapService.type), ServiceInfo(SimpleNotaryService.type))
         val n1 = network.createNode(n0.info.address)
 
         // Insert an attachment into node zero's store directly.
