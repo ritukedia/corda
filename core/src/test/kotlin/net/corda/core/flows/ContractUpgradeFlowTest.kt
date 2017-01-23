@@ -23,6 +23,7 @@ import javax.persistence.Column
 import javax.persistence.Entity
 import javax.persistence.Table
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertTrue
 
 class ContractUpgradeFlowTest {
@@ -67,30 +68,22 @@ class ContractUpgradeFlowTest {
         requireNotNull(btx)
 
         // The request is expected to be rejected because party B haven't accepted upgrade yet.
-        val rejectedFuture = a.services.startFlow(ContractUpgradeFlow(atx!!.tx.outRef(0), DummyContractUpgrade)).resultFuture
+        val rejectedFuture = a.services.startFlow(ContractUpgradeFlow.Instigator(atx!!.tx.outRef(0), DummyContractUpgrade())).resultFuture
         mockNet.runNetwork()
-        val rejected = rejectedFuture.get()
-        assertTrue(rejected is ContractUpgradeResponse.Rejected)
+        assertFails { rejectedFuture.get() }
 
         // Party B accept to upgrade the contract state.
-        b.services.startFlow(ContractUpgradeAcceptFlow(btx!!.tx.outRef(0), DummyContractUpgrade))
-        mockNet.runNetwork()
+        b.services.vaultService.acceptContractStateUpgrade(btx!!.tx.outRef(0), DummyContractUpgrade())
 
         // Party A initiate contract upgrade flow, expected to success this time.
-        val resultFuture = a.services.startFlow(ContractUpgradeFlow(atx.tx.outRef(0), DummyContractUpgrade)).resultFuture
+        val resultFuture = a.services.startFlow(ContractUpgradeFlow.Instigator(atx.tx.outRef(0), DummyContractUpgrade())).resultFuture
         mockNet.runNetwork()
 
         val result = resultFuture.get()
-        assertTrue(result is ContractUpgradeResponse.Accepted<*>)
 
-        val (updateTX_A, updateTX_B) = when (result) {
-            is ContractUpgradeResponse.Accepted<*> -> {
-                val updateTX_A = databaseTransaction(a.database) { a.services.storageService.validatedTransactions.getTransaction(result.ref.ref.txhash) }
-                val updateTX_B = databaseTransaction(b.database) { b.services.storageService.validatedTransactions.getTransaction(result.ref.ref.txhash) }
-                Pair(updateTX_A, updateTX_B)
-            }
-            else -> Pair(null, null)
-        }
+        val updateTX_A = databaseTransaction(a.database) { a.services.storageService.validatedTransactions.getTransaction(result.ref.txhash) }
+        val updateTX_B = databaseTransaction(b.database) { b.services.storageService.validatedTransactions.getTransaction(result.ref.txhash) }
+
         requireNotNull(updateTX_A)
         requireNotNull(updateTX_B)
 
@@ -126,7 +119,7 @@ class ContractUpgradeFlowTest {
         }
         requireNotNull(stateAndRef)
         // Starts contract upgrade flow.
-        a.services.startFlow(ContractUpgradeFlow(stateAndRef!!, CashUpgrade))
+        a.services.startFlow(ContractUpgradeFlow.Instigator(stateAndRef!!, CashUpgrade))
         mockNet.runNetwork()
         // Get contract state form the vault.
         val state = databaseTransaction(a.database) { a.vault.currentVault.states }
@@ -139,13 +132,12 @@ class ContractUpgradeFlowTest {
     // Dummy upgraded Cash Contract object for testing.
     object CashUpgrade : ContractUpgrade<Cash.State, CashStateV2> {
         override fun upgrade(state: Cash.State): Pair<CashStateV2, Commands.Upgrade> {
-            return Pair(CashStateV2(state.amount.times(1000), listOf(state.owner)), Commands.Upgrade)
+            val newContractState = CashStateV2(state.amount.times(1000), listOf(state.owner))
+            return Pair(newContractState, Commands.Upgrade(state, newContractState))
         }
 
         interface Commands : CommandData {
-            object Upgrade : UpgradeCommand<Cash.State, CashStateV2>, Commands {
-                override val oldContract = Cash()
-                override val newContract = Cash()
+            data class Upgrade(override val oldContractState: Cash.State, override val newContractState: CashStateV2) : UpgradeCommand<Cash.State, CashStateV2>, Commands {
                 override val upgrade = CashUpgrade
             }
         }
@@ -180,7 +172,7 @@ class ContractUpgradeFlowTest {
         override fun supportedSchemas(): Iterable<MappedSchema> = listOf(CashSchemaV2)
     }
 
-    object CashSchemaV2 : MappedSchema(schemaFamily = CashSchema.javaClass, version = 1, mappedTypes = listOf(PersistentCashState::class.java)) {
+    object CashSchemaV2 : MappedSchema(schemaFamily = CashSchema.javaClass, version = 2, mappedTypes = listOf(PersistentCashState::class.java)) {
         @Entity
         @Table(name = "cash_states")
         class PersistentCashState(

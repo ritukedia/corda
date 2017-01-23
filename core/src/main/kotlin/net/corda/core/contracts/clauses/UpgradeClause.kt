@@ -23,9 +23,9 @@ abstract class UpgradeClause<in S : ContractState, C : CommandData, in K : Any>(
                 "the signing keys include all participant keys" by keysThatSigned.containsAll(participants)
                 "there is at least one input" by inputs.isNotEmpty()
                 "number of inputs and outputs match" by (inputs.size == outputs.size)
-                "all inputs belong to the legacy contract" by inputs.all { it.contract == command.value.oldContract }
+                "all inputs belong to the legacy contract" by inputs.all { it.contract == command.value.oldContractState.contract }
                 "all inputs are of a suitable type" by outputs.all { it.javaClass == expectedType }
-                "all outputs belong to the upgraded contract" by outputs.all { it.contract.javaClass == command.value.newContract.javaClass }
+                "all outputs belong to the upgraded contract" by outputs.all { it.contract.javaClass == command.value.newContractState.contract.javaClass }
             }
 
             val upgradeContract = command.value.upgrade

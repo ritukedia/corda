@@ -397,15 +397,10 @@ interface NetCommand : CommandData {
 }
 
 /** Indicates that this transaction replaces the inputs from a legacy contract to a new equivalent contract. */
-interface UpgradeCommand<in S : ContractState, out T : ContractState> : CommandData {
-    val oldContract: Contract
-    val newContract: Contract
-    val upgrade: ContractUpgrade<S, T>
-}
-
-interface ContractUpgradeResponse {
-    class Accepted<out T : ContractState>(val ref: StateAndRef<T>) : ContractUpgradeResponse
-    class Rejected(val reason: String?) : ContractUpgradeResponse
+interface UpgradeCommand<OldState : ContractState, out NewState : ContractState> : CommandData {
+    val oldContractState: OldState
+    val newContractState: NewState
+    val upgrade: ContractUpgrade<OldState, NewState>
 }
 
 /** Wraps an object that was signed by a public key, which may be a well known/recognised institutional key. */
@@ -457,21 +452,20 @@ interface Contract {
 }
 
 /**
- * Interface for contracts which can upgrade state objects issued by other contracts. Generally represents that this
- * is an upgraded version of the previous contract.
+ * Interface which can upgrade state objects issued by other contracts.
  *
- * @param S the old contract state (can be [ContractState] or other common supertype if this supports upgrading
+ * @param OldState the old contract state (can be [ContractState] or other common supertype if this supports upgrading
  * more than one state).
- * @param T the new contract state
+ * @param NewState the new contract state
  */
-interface ContractUpgrade<in S : ContractState, out T : ContractState> {
+interface ContractUpgrade<OldState : ContractState, out NewState : ContractState> {
     /**
      * Upgrade contract's state object to a new state object.
      *
      * @throws IllegalArgumentException if the given state object is not one that can be upgraded. This can be either
      * that the class is incompatible, or that the data inside the state object cannot be upgraded for some reason.
      */
-    fun upgrade(state: S): Pair<T, UpgradeCommand<S, T>>
+    fun upgrade(state: OldState): Pair<NewState, UpgradeCommand<OldState, NewState>>
 }
 
 /**

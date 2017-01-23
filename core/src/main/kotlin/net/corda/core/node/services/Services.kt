@@ -147,7 +147,7 @@ interface VaultService {
         return refs.associateBy({ it }) { refsToStates[it]?.state }
     }
 
-    fun statesForRef(ref: StateRef): TransactionState<*>? {
+    fun stateForRef(ref: StateRef): TransactionState<*>? {
         return currentVault.states.find { it.ref == ref }?.state
     }
 
