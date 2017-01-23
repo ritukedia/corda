@@ -4,6 +4,7 @@ import net.corda.contracts.asset.Cash
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
+import net.corda.core.crypto.SecureHash
 import net.corda.core.node.recordTransactions
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
@@ -119,57 +120,65 @@ class ContractUpgradeFlowTest {
         }
         requireNotNull(stateAndRef)
         // Starts contract upgrade flow.
-        a.services.startFlow(ContractUpgradeFlow.Instigator(stateAndRef!!, CashUpgrade))
+        a.services.startFlow(ContractUpgradeFlow.Instigator(stateAndRef!!, CashUpgrade()))
         mockNet.runNetwork()
         // Get contract state form the vault.
         val state = databaseTransaction(a.database) { a.vault.currentVault.states }
         assertTrue(state.size == 1)
-        assertTrue(state.first().state.data is CashStateV2, "Contract state is upgraded to the new version.")
-        assertEquals(Amount(1000000, USD).`issued by`(a.info.legalIdentity.ref(1)), (state.first().state.data as CashStateV2).amount, "Upgraded cash contain the correct amount.")
-        assertEquals(listOf(a.info.legalIdentity.owningKey), (state.first().state.data as CashStateV2).owners, "Upgraded cash belongs to the right owner.")
+        assertTrue(state.first().state.data is CashV2.State, "Contract state is upgraded to the new version.")
+        assertEquals(Amount(1000000, USD).`issued by`(a.info.legalIdentity.ref(1)), (state.first().state.data as CashV2.State).amount, "Upgraded cash contain the correct amount.")
+        assertEquals(listOf(a.info.legalIdentity.owningKey), (state.first().state.data as CashV2.State).owners, "Upgraded cash belongs to the right owner.")
     }
 
     // Dummy upgraded Cash Contract object for testing.
-    object CashUpgrade : ContractUpgrade<Cash.State, CashStateV2> {
-        override fun upgrade(state: Cash.State): Pair<CashStateV2, Commands.Upgrade> {
-            val newContractState = CashStateV2(state.amount.times(1000), listOf(state.owner))
-            return Pair(newContractState, Commands.Upgrade(state, newContractState))
-        }
-
-        interface Commands : CommandData {
-            data class Upgrade(override val oldContractState: Cash.State, override val newContractState: CashStateV2) : UpgradeCommand<Cash.State, CashStateV2>, Commands {
-                override val upgrade = CashUpgrade
-            }
+    class CashUpgrade : ContractUpgrade<Cash.State, CashV2.State> {
+        override fun upgrade(state: Cash.State): Pair<CashV2.State, CashV2.Commands.Upgrade> {
+            val newContractState = CashV2.State(state.amount.times(1000), listOf(state.owner))
+            return Pair(newContractState, CashV2.Commands.Upgrade(state, newContractState))
         }
     }
 
-    data class CashStateV2(override val amount: Amount<Issued<Currency>>, val owners: List<CompositeKey>) : FungibleAsset<Currency>, QueryableState {
-        override val owner: CompositeKey = owners.first()
-        override val exitKeys = (owners + amount.token.issuer.party.owningKey).toSet()
-        override val contract = Cash()
-        override val participants = owners
-
-        override fun move(newAmount: Amount<Issued<Currency>>, newOwner: CompositeKey) = copy(amount = amount.copy(newAmount.quantity, amount.token), owners = listOf(newOwner))
-        override fun toString() = "${Emoji.bagOfCash}New Cash($amount at ${amount.token.issuer} owned by $owner)"
-        override fun withNewOwner(newOwner: CompositeKey) = Pair(Cash.Commands.Move(), copy(owners = listOf(newOwner)))
-
-        /** Object Relational Mapping support. */
-        override fun generateMappedObject(schema: MappedSchema): PersistentState {
-            return when (schema) {
-                is CashSchemaV2 -> CashSchemaV2.PersistentCashState(
-                        owner = this.owner.toBase58String(),
-                        secondOwner = this.owners.last().toBase58String(),
-                        pennies = this.amount.quantity,
-                        currency = this.amount.token.product.currencyCode,
-                        issuerParty = this.amount.token.issuer.party.owningKey.toBase58String(),
-                        issuerRef = this.amount.token.issuer.reference.bytes
-                )
-                else -> throw IllegalArgumentException("Unrecognised schema $schema")
+    class CashV2 : Contract {
+        interface Commands : CommandData {
+            data class Upgrade(override val oldContractState: Cash.State, override val newContractState: CashV2.State) : UpgradeCommand<Cash.State, CashV2.State>, Commands {
+                override val upgrade = CashUpgrade()
             }
         }
 
-        /** Object Relational Mapping support. */
-        override fun supportedSchemas(): Iterable<MappedSchema> = listOf(CashSchemaV2)
+        data class State(override val amount: Amount<Issued<Currency>>, val owners: List<CompositeKey>) : FungibleAsset<Currency>, QueryableState {
+            override val owner: CompositeKey = owners.first()
+            override val exitKeys = (owners + amount.token.issuer.party.owningKey).toSet()
+            override val contract = CashV2()
+            override val participants = owners
+
+            override fun move(newAmount: Amount<Issued<Currency>>, newOwner: CompositeKey) = copy(amount = amount.copy(newAmount.quantity, amount.token), owners = listOf(newOwner))
+            override fun toString() = "${Emoji.bagOfCash}New Cash($amount at ${amount.token.issuer} owned by $owner)"
+            override fun withNewOwner(newOwner: CompositeKey) = Pair(Cash.Commands.Move(), copy(owners = listOf(newOwner)))
+
+            /** Object Relational Mapping support. */
+            override fun generateMappedObject(schema: MappedSchema): PersistentState {
+                return when (schema) {
+                    is CashSchemaV2 -> CashSchemaV2.PersistentCashState(
+                            owner = this.owner.toBase58String(),
+                            secondOwner = this.owners.last().toBase58String(),
+                            pennies = this.amount.quantity,
+                            currency = this.amount.token.product.currencyCode,
+                            issuerParty = this.amount.token.issuer.party.owningKey.toBase58String(),
+                            issuerRef = this.amount.token.issuer.reference.bytes
+                    )
+                    else -> throw IllegalArgumentException("Unrecognised schema $schema")
+                }
+            }
+
+            /** Object Relational Mapping support. */
+            override fun supportedSchemas(): Iterable<MappedSchema> = listOf(CashSchemaV2)
+        }
+
+        override fun verify(tx: TransactionForContract) {}
+
+        // Dummy Cash contract for testing.
+        override val legalContractReference = SecureHash.sha256("")
+
     }
 
     object CashSchemaV2 : MappedSchema(schemaFamily = CashSchema.javaClass, version = 2, mappedTypes = listOf(PersistentCashState::class.java)) {

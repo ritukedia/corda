@@ -1,7 +1,5 @@
 package net.corda.core.contracts
 
-import net.corda.core.contracts.clauses.UpgradeClause
-import net.corda.core.contracts.clauses.verifyClause
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.SecureHash
 import net.corda.core.transactions.WireTransaction
@@ -10,9 +8,8 @@ import net.corda.core.transactions.WireTransaction
 val DUMMY_V2_PROGRAM_ID = DummyContractV2()
 
 /**
- * Dummy contract for testing of the upgrade process.
+ * Dummy contract state upgrade logic for testing of the upgrade process.
  */
-
 class DummyContractUpgrade : ContractUpgrade<DummyContract.State, DummyContractV2.State> {
     override fun upgrade(state: DummyContract.State): Pair<DummyContractV2.State, DummyContractV2.Commands.Upgrade> {
         val newState = DummyContractV2.State(state.magicNumber, state.participants)
@@ -21,12 +18,6 @@ class DummyContractUpgrade : ContractUpgrade<DummyContract.State, DummyContractV
 }
 
 class DummyContractV2 : Contract {
-    interface Clauses {
-        class Upgrade : UpgradeClause<ContractState, Commands, Unit>(State::class.java) {
-            override val requiredCommands: Set<Class<out CommandData>> = setOf(Commands.Upgrade::class.java)
-        }
-    }
-
     data class State(val magicNumber: Int = 0, val owners: List<CompositeKey>) : ContractState {
         override val contract = DUMMY_V2_PROGRAM_ID
         override val participants: List<CompositeKey> = owners
@@ -40,9 +31,7 @@ class DummyContractV2 : Contract {
         }
     }
 
-    fun extractCommands(tx: TransactionForContract) = tx.commands.select<Commands>()
-    override fun verify(tx: TransactionForContract) = verifyClause(tx, Clauses.Upgrade(), extractCommands(tx))
-
+    override fun verify(tx: TransactionForContract) {}
     // The "empty contract"
     override val legalContractReference: SecureHash = SecureHash.sha256("")
 

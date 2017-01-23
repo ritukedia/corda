@@ -456,7 +456,7 @@ interface Contract {
  *
  * @param OldState the old contract state (can be [ContractState] or other common supertype if this supports upgrading
  * more than one state).
- * @param NewState the new contract state
+ * @param NewState the upgraded contract state
  */
 interface ContractUpgrade<OldState : ContractState, out NewState : ContractState> {
     /**

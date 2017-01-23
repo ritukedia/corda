@@ -14,29 +14,33 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.WireTransaction
 import net.corda.core.utilities.ProgressTracker
 import net.corda.core.utilities.UntrustworthyData
-import net.corda.flows.AbstractStateReplacementFlow.Acceptor
-import net.corda.flows.AbstractStateReplacementFlow.Instigator
 
 /**
  * Abstract flow to be used for replacing one state with another, for example when changing the notary of a state.
  * Notably this requires a one to one replacement of states, states cannot be split, merged or issued as part of these
  * flows.
- *
- * The [Instigator] assembles the transaction for state replacement and sends out change proposals to all participants
- * ([Acceptor]) of that state. If participants agree to the proposed change, they each sign the transaction.
- * Finally, [Instigator] sends the transaction containing all participants' signatures to the notary for signature, and
- * then back to each participant so they can record it and use the new updated state for future transactions.
  */
 object AbstractStateReplacementFlow {
-    interface Proposal<out T> {
+
+    /**
+     * The [Proposal] contains the details of proposed state modification.
+     * This is the message sent by the [Instigator] to all participants([Acceptor]) during the state replacement process.
+     */
+    interface Proposal<out M> {
         val stateRef: StateRef
-        val modification: T
+        val modification: M
         val stx: SignedTransaction
     }
 
     /**
+     * The [Instigator] assembles the transaction for state replacement and sends out change proposals to all participants
+     * ([Acceptor]) of that state. If participants agree to the proposed change, they each sign the transaction.
+     * Finally, [Instigator] sends the transaction containing all participants' signatures to the notary for signature, and
+     * then back to each participant so they can record it and use the new updated state for future transactions.
+     *
      * @param S the input contract state
-     * @param T the output contract state, this could be different from [S] in some cases. For example, in contract upgrade, the output state object might be different from the input state.
+     * @param T the output contract state, this can be different from [S]. For example, in contract upgrade, the output state might be different from the input state after the upgrade process.
+     * @param M the modification proposed by the instigator.
      */
     abstract class Instigator<out S : ContractState, out T : ContractState, M>(val originalState: StateAndRef<S>,
                                                                                val modification: M,
@@ -115,6 +119,10 @@ object AbstractStateReplacementFlow {
         }
     }
 
+    /**
+     * The [Acceptor] receives and verifies the [Proposal] sent from the [Instigator].
+     * The [Acceptor] will sign and return the transaction to the [Instigator] if it agrees with the proposed state changes.
+     */
     abstract class Acceptor<T>(val otherSide: Party,
                                override val progressTracker: ProgressTracker = tracker()) : FlowLogic<Unit>() {
 
