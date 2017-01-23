@@ -14,10 +14,10 @@ object Requery {
     @Superclass interface PersistentState : Persistable {
         @get:Key
         @get:Column(name = "transaction_id", length = 64)
-        var txId: String?
+        var txId: String
 
         @get:Key
         @get:Column(name = "output_index")
-        var index: Int?
+        var index: Int
     }
 }

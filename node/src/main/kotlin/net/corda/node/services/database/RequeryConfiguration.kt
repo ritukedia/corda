@@ -8,6 +8,7 @@ import io.requery.sql.KotlinConfiguration
 import io.requery.sql.KotlinEntityDataStore
 import io.requery.sql.SchemaModifier
 import io.requery.sql.TableCreationMode
+import net.corda.core.crypto.SecureHash
 import net.corda.core.utilities.loggerFor
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -47,10 +48,10 @@ class RequeryConfiguration() {
      *
      * @param nodeName Reflects an instance of the in-memory database.  Defaults to a random string.
      */
-    private fun configureDataSourceProperties(): Properties {
+    private fun configureDataSourceProperties(nodeName: String = SecureHash.randomSHA256().toString()): Properties {
         val props = Properties()
         props.setProperty("dataSourceClassName", "org.h2.jdbcx.JdbcDataSource")
-        props.setProperty("dataSource.url", "jdbc:h2:mem:corda;TRACE_LEVEL_SYSTEM_OUT=2;DB_CLOSE_ON_EXIT=FALSE")
+        props.setProperty("dataSource.url", "jdbc:h2:mem:corda_${nodeName};TRACE_LEVEL_SYSTEM_OUT=2;DB_CLOSE_ON_EXIT=FALSE")
         props.setProperty("dataSource.user", "sa")
         props.setProperty("dataSource.password", "")
         return props

@@ -68,15 +68,15 @@ class VaultWithCashTest {
             // Fix the PRNG so that we get the same splits every time.
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
 
-            val w = vault.currentVault
-            assertEquals(3, w.states.toList().size)
+            val w = vault.unconsumedStates(Cash.State::class.java)
+            assertEquals(3, w.toList().size)
 
-            val state = w.states.toList()[0].state.data as Cash.State
+            val state = w.toList()[0].state.data
             assertEquals(30.45.DOLLARS `issued by` DUMMY_CASH_ISSUER, state.amount)
             assertEquals(services.key.public.composite, state.owner)
 
-            assertEquals(34.70.DOLLARS `issued by` DUMMY_CASH_ISSUER, (w.states.toList()[2].state.data as Cash.State).amount)
-            assertEquals(34.85.DOLLARS `issued by` DUMMY_CASH_ISSUER, (w.states.toList()[1].state.data as Cash.State).amount)
+            assertEquals(34.70.DOLLARS `issued by` DUMMY_CASH_ISSUER, (w.toList()[2].state.data).amount)
+            assertEquals(34.85.DOLLARS `issued by` DUMMY_CASH_ISSUER, (w.toList()[1].state.data).amount)
         }
     }
 
@@ -157,7 +157,7 @@ class VaultWithCashTest {
             dummyIssue.toLedgerTransaction(services).verify()
 
             services.recordTransactions(dummyIssue)
-            assertEquals(1, vault.currentVault.states.toList().size)
+            assertEquals(1, vault.unconsumedStates(DummyLinearContract.State::class.java).toList().size)
 
             // Move the same state
             val dummyMove = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
@@ -169,7 +169,7 @@ class VaultWithCashTest {
             dummyIssue.toLedgerTransaction(services).verify()
 
             services.recordTransactions(dummyMove)
-            assertEquals(1, vault.currentVault.states.toList().size)
+            assertEquals(1, vault.unconsumedStates(DummyLinearContract.State::class.java).toList().size)
         }
     }
 }

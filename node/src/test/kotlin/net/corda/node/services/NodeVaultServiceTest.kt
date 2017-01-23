@@ -61,12 +61,13 @@ class NodeVaultServiceTest {
             }
             services1.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
 
-            val w1 = services1.vaultService.currentVault
-            assertThat(w1.states).hasSize(3)
+            val w1 = services1.vaultService.unconsumedStates(Cash.State::class.java)
+            assertThat(w1).hasSize(3)
 
             val originalStorage = services1.storageService
+            val originalVault = services1.vaultService
             val services2 = object : MockServices() {
-                override val vaultService: VaultService = NodeVaultService(this)
+                override val vaultService: VaultService get() = originalVault
 
                 // We need to be able to find the same transactions as before, too.
                 override val storageService: TxWritableStorageService get() = originalStorage
@@ -79,8 +80,32 @@ class NodeVaultServiceTest {
                 }
             }
 
-            val w2 = services2.vaultService.currentVault
-            assertThat(w2.states).hasSize(3)
+            val w2 = services2.vaultService.unconsumedStates(Cash.State::class.java)
+            assertThat(w2).hasSize(3)
+        }
+    }
+
+    @Test
+    fun `states for refs`() {
+        databaseTransaction(database) {
+            val services1 = object : MockServices() {
+                override val vaultService: VaultService = NodeVaultService(this)
+
+                override fun recordTransactions(txs: Iterable<SignedTransaction>) {
+                    for (stx in txs) {
+                        storageService.validatedTransactions.addTransaction(stx)
+                        vaultService.notify(stx.tx)
+                    }
+                }
+            }
+            services1.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
+
+            val w1 = services1.vaultService.unconsumedStates(Cash.State::class.java)
+            assertThat(w1).hasSize(3)
+
+            val stateRefs = listOf(w1[1].ref, w1[2].ref)
+            val states = services1.vaultService.statesForRefs(stateRefs)
+            assertThat(states).hasSize(2)
         }
     }
 

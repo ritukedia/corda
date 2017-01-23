@@ -47,12 +47,12 @@ class DataVendingServiceTests {
         ptx.signWith(registerKey)
         val tx = ptx.toSignedTransaction()
         databaseTransaction(vaultServiceNode.database) {
-            assertEquals(0, vaultServiceNode.services.vaultService.currentVault.states.toList().size)
+            assertEquals(0, vaultServiceNode.services.vaultService.unconsumedStates(Cash.State::class.java).toList().size)
 
             registerNode.sendNotifyTx(tx, vaultServiceNode)
 
             // Check the transaction is in the receiving node
-            val actual = vaultServiceNode.services.vaultService.currentVault.states.singleOrNull()
+            val actual = vaultServiceNode.services.vaultService.unconsumedStates(Cash.State::class.java).singleOrNull()
             val expected = tx.tx.outRef<Cash.State>(0)
 
             assertEquals(expected, actual)
@@ -78,12 +78,12 @@ class DataVendingServiceTests {
         ptx.signWith(registerKey)
         val tx = ptx.toSignedTransaction(false)
         databaseTransaction(vaultServiceNode.database) {
-            assertEquals(0, vaultServiceNode.services.vaultService.currentVault.states.toList().size)
+            assertEquals(0, vaultServiceNode.services.vaultService.unconsumedStates(Cash.State::class.java).toList().size)
 
             registerNode.sendNotifyTx(tx, vaultServiceNode)
 
             // Check the transaction is not in the receiving node
-            assertEquals(0, vaultServiceNode.services.vaultService.currentVault.states.toList().size)
+            assertEquals(0, vaultServiceNode.services.vaultService.unconsumedStates(Cash.State::class.java).toList().size)
         }
     }
 

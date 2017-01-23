@@ -75,7 +75,7 @@ class CashFlow(val command: CashCommand, override val progressTracker: ProgressT
         try {
             val issuer = PartyAndReference(serviceHub.myInfo.legalIdentity, req.issueRef)
             Cash().generateExit(builder, req.amount.issuedBy(issuer),
-                    serviceHub.vaultService.currentVault.statesOfType<Cash.State>().filter { it.state.data.owner == issuer.party.owningKey })
+                    serviceHub.vaultService.unconsumedStates(Cash.State::class.java).filter { it.state.data.owner == issuer.party.owningKey })
             val myKey = serviceHub.legalIdentityKey
             builder.signWith(myKey)
 

@@ -14,7 +14,7 @@ object VaultSchema {
         @get:Key
         @get:Generated
         @get:Column(name = "seq_no", index = true)
-        var seqNo: Integer
+        var seqNo: Int
 
 //        @get:Index
         @get:Column(name = "transaction_id", length = 64, index = true)
@@ -47,9 +47,9 @@ object VaultSchema {
         @get:Column(name = "contract_state_class_name")
         var contractStateClassName: String
 
-        // references a concrete ContractState that is [QueryableState] and has a [MappedSchema] version
-        @get:Column(name = "contract_state_class_version")
-        var contractStateClassVersion: Int
+        // reference to serialized transaction Contract State
+        @get:Column(name = "contract_state", length = 10000 )
+        var contractState: ByteArray
 
         @get:Column(name = "state_status")
         var stateStatus: StateStatus

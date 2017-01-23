@@ -98,11 +98,6 @@ class Vault(val states: List<StateAndRef<ContractState>>) {
  * Note that transactions we've seen are held by the storage service, not the vault.
  */
 interface VaultService {
-    /**
-     * Returns a read-only snapshot of the vault at the time the call is made. Note that if you consume states or
-     * keys in this vault, you must inform the vault service so it can update its internal state.
-     */
-    val currentVault: Vault
 
     /**
      * Prefer the use of [updates] unless you know why you want to use this instead.
@@ -133,6 +128,10 @@ interface VaultService {
      */
     fun track(): Pair<Vault, Observable<Vault.Update>>
 
+//    /** Return all [ContractState] of a given type */
+//    @Suppress("UNCHECKED_CAST")
+//    fun <T : ContractState> statesOfType(stateType: Class<T>): List<StateAndRef<T>>
+
     /**
      * Returns a snapshot of the heads of LinearStates.
      */
@@ -146,10 +145,7 @@ interface VaultService {
         return linearHeads.filterValues { stateType.isInstance(it.state.data) }.mapValues { StateAndRef(it.value.state as TransactionState<T>, it.value.ref) }
     }
 
-    fun statesForRefs(refs: List<StateRef>): Map<StateRef, TransactionState<*>?> {
-        val refsToStates = currentVault.states.associateBy { it.ref }
-        return refs.associateBy({ it }, { refsToStates[it]?.state })
-    }
+    fun statesForRefs(refs: List<StateRef>): Map<StateRef, TransactionState<*>?>
 
     /**
      * Possibly update the vault by marking as spent states that these transactions consume, and adding any relevant
@@ -193,6 +189,8 @@ interface VaultService {
                       amount: Amount<Currency>,
                       to: CompositeKey,
                       onlyFromParties: Set<Party>? = null): Pair<TransactionBuilder, List<CompositeKey>>
+
+    fun <T : ContractState> unconsumedStates(clazz: Class<T>): List<StateAndRef<T>>
 }
 
 inline fun <reified T : LinearState> VaultService.linearHeadsOfType() = linearHeadsOfType_(T::class.java)
