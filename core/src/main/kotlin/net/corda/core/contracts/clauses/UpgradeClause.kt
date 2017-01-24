@@ -10,8 +10,8 @@ import net.corda.core.crypto.CompositeKey
  */
 abstract class UpgradeClause<in S : ContractState, C : CommandData, in K : Any>(val expectedType: Class<*>) : Clause<S, C, K>() {
     override fun verify(tx: TransactionForContract, inputs: List<S>, outputs: List<S>, commands: List<AuthenticatedObject<C>>, groupingKey: K?): Set<C> {
-        val matchedCommands = commands.filter { it.value is ContractUpgrade.Command<*, *> }
-        val command = matchedCommands.select<ContractUpgrade.Command<S, *>>().singleOrNull()
+        val matchedCommands = commands.filter { it.value is UpgradeCommand<*, *> }
+        val command = matchedCommands.select<UpgradeCommand<S, *>>().singleOrNull()
 
         if (command != null) {
             // Now check the digital signatures on the move command. Every input has an owning public key, and we must
@@ -26,13 +26,7 @@ abstract class UpgradeClause<in S : ContractState, C : CommandData, in K : Any>(
                 "all inputs belong to the legacy contract" by inputs.all { it.contract.javaClass == command.value.contractUpgrade.legacyContract.javaClass }
                 "all inputs are of a suitable type" by outputs.all { it.javaClass == expectedType }
                 "all outputs belong to the upgraded contract" by outputs.all { it.contract.javaClass == command.value.contractUpgrade.upgradedContract.javaClass }
-            }
-
-            val upgradeContract = command.value.contractUpgrade
-
-            for (stateIdx in 0..inputs.size - 1) {
-                val expected: ContractState = upgradeContract.upgrade(inputs[stateIdx])
-                require(outputs[stateIdx] == expected) { "output state is must be an upgraded version of the input state" }
+                "output state must be an upgraded version of the input state" by inputs.zip(outputs).all { it.second == command.value.contractUpgrade.upgrade(it.first) }
             }
         }
         return matchedCommands.map { it.value }.toSet()

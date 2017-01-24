@@ -30,8 +30,7 @@ data class DummyContract(override val legalContractReference: SecureHash = Secur
     data class MultiOwnerState(override val magicNumber: Int = 0,
                                val owners: List<CompositeKey>) : ContractState, State {
         override val contract = DUMMY_PROGRAM_ID
-        override val participants: List<CompositeKey>
-            get() = owners
+        override val participants: List<CompositeKey> get() = owners
     }
 
     interface Commands : CommandData {
@@ -45,7 +44,8 @@ data class DummyContract(override val legalContractReference: SecureHash = Secur
 
     companion object {
         @JvmStatic
-        fun generateInitial(magicNumber: Int, notary: Party, vararg owners: PartyAndReference): TransactionBuilder {
+        fun generateInitial(magicNumber: Int, notary: Party, owner: PartyAndReference, vararg otherOwners: PartyAndReference): TransactionBuilder {
+            val owners = listOf(owner) + otherOwners
             return if (owners.size == 1) {
                 val state = SingleOwnerState(magicNumber, owners.first().party.owningKey)
                 TransactionType.General.Builder(notary = notary).withItems(state, Command(Commands.Create(), owners.first().party.owningKey))

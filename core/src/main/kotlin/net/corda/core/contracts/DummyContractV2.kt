@@ -47,7 +47,7 @@ class DummyContractV2 : Contract {
             states.forEach {
                 addInputState(it)
                 addOutputState(DummyContractUpgrade().upgrade(it.state.data))
-                addCommand(ContractUpgrade.Command(DummyContractUpgrade()), signees.toList())
+                addCommand(UpgradeCommand(DummyContractUpgrade()), signees.toList())
             }
         }.toWireTransaction(), signees)
     }

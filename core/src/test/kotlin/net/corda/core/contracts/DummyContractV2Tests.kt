@@ -26,7 +26,7 @@ class DummyContractV2Tests {
         assertEquals(expectedOutput, actualOutput)
 
         val actualCommand = tx.commands.map { it.value }.single()
-        assertTrue((actualCommand as ContractUpgrade.Command<*, *>).contractUpgrade is DummyContractUpgrade)
+        assertTrue((actualCommand as UpgradeCommand<*, *>).contractUpgrade is DummyContractUpgrade)
         assertTrue(actualCommand.contractUpgrade.upgradedContract is DummyContractV2)
     }
 }

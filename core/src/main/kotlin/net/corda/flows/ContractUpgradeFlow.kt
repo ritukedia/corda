@@ -26,7 +26,7 @@ object ContractUpgradeFlow {
     private fun <OldState : ContractState, NewState : ContractState> assembleBareTx(stateRef: StateAndRef<OldState>,
                                                                                     contractUpgrade: ContractUpgrade<OldState, NewState>): TransactionBuilder {
         return TransactionType.General.Builder(stateRef.state.notary).apply {
-            withItems(stateRef, contractUpgrade.upgrade(stateRef.state.data), Command(ContractUpgrade.Command(contractUpgrade), stateRef.state.data.participants))
+            withItems(stateRef, contractUpgrade.upgrade(stateRef.state.data), Command(UpgradeCommand(contractUpgrade), stateRef.state.data.participants))
         }
     }
 

@@ -445,13 +445,15 @@ interface Contract {
 }
 
 /**
- * Interface which can upgrade state objects issued by other contracts.
+ * Interface which can upgrade state objects issued by a contract to a new state object issued by a different contract.
  *
  * @param OldState the old contract state (can be [ContractState] or other common supertype if this supports upgrading
  * more than one state).
- * @param NewState the upgraded contract state
+ * @param NewState the upgraded contract state.
  */
 interface ContractUpgrade<in OldState : ContractState, out NewState : ContractState> {
+    val legacyContract: Contract
+    val upgradedContract: Contract
     /**
      * Upgrade contract's state object to a new state object.
      *
@@ -459,25 +461,23 @@ interface ContractUpgrade<in OldState : ContractState, out NewState : ContractSt
      * that the class is incompatible, or that the data inside the state object cannot be upgraded for some reason.
      */
     fun upgrade(state: OldState): NewState
+}
 
-    val legacyContract: Contract
-    val upgradedContract: Contract
+/** Indicates that this transaction replaces the inputs contract state to another contract state using [contractUpgrade] */
+class UpgradeCommand<in OldState : ContractState, out NewState : ContractState>(val contractUpgrade: ContractUpgrade<OldState, NewState>) : CommandData {
+    // This is needed to make sure ContractUpgrade of the same class equals, ideally ContractUpgrade should be a singleton object.
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other?.javaClass != javaClass) return false
 
-    /** Indicates that this transaction replaces the inputs contract state to another contract state using the [upgradeLogic] */
-    class Command<in OldState : ContractState, out NewState : ContractState>(val contractUpgrade: ContractUpgrade<OldState, NewState>) : CommandData {
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (other?.javaClass != javaClass) return false
+        other as UpgradeCommand<*, *>
 
-            other as Command<*, *>
+        if (contractUpgrade.javaClass != other.contractUpgrade.javaClass) return false
 
-            if (contractUpgrade.javaClass != other.contractUpgrade.javaClass) return false
-
-            return true
-        }
-
-        override fun hashCode() = contractUpgrade.javaClass.name.hashCode()
+        return true
     }
+
+    override fun hashCode() = contractUpgrade.javaClass.name.hashCode()
 }
 
 /**
