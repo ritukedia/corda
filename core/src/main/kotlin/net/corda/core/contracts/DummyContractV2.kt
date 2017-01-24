@@ -8,17 +8,11 @@ import net.corda.core.transactions.WireTransaction
 val DUMMY_V2_PROGRAM_ID = DummyContractV2()
 
 /**
- * Dummy contract state upgrade logic for testing of the upgrade process.
+ * Dummy contract state for testing of the upgrade process.
  */
-class DummyContractUpgrade : ContractUpgrade<DummyContract.State, DummyContractV2.State> {
-    override val legacyContract: Contract get() = DUMMY_PROGRAM_ID
-    override val upgradedContract: Contract get() = DUMMY_V2_PROGRAM_ID
-    override fun upgrade(state: DummyContract.State): DummyContractV2.State {
-        return DummyContractV2.State(state.magicNumber, state.participants)
-    }
-}
+class DummyContractV2 : UpgradedContract<DummyContract.State, DummyContractV2.State> {
+    override val legacyContract = DUMMY_PROGRAM_ID
 
-class DummyContractV2 : Contract {
     data class State(val magicNumber: Int = 0, val owners: List<CompositeKey>) : ContractState {
         override val contract = DUMMY_V2_PROGRAM_ID
         override val participants: List<CompositeKey> = owners
@@ -29,7 +23,14 @@ class DummyContractV2 : Contract {
         class Move : TypeOnlyCommandData(), Commands
     }
 
-    override fun verify(tx: TransactionForContract) {}
+    override fun upgrade(state: DummyContract.State): DummyContractV2.State {
+        return DummyContractV2.State(state.magicNumber, state.participants)
+    }
+
+    override fun verify(tx: TransactionForContract) {
+        if (tx.commands.any { it.value is UpgradeCommand<*, *> }) return
+    }
+
     // The "empty contract"
     override val legalContractReference: SecureHash = SecureHash.sha256("")
 
@@ -46,8 +47,8 @@ class DummyContractV2 : Contract {
         return Pair(TransactionType.General.Builder(notary).apply {
             states.forEach {
                 addInputState(it)
-                addOutputState(DummyContractUpgrade().upgrade(it.state.data))
-                addCommand(UpgradeCommand(DummyContractUpgrade()), signees.toList())
+                addOutputState(upgrade(it.state.data))
+                addCommand(UpgradeCommand(DUMMY_V2_PROGRAM_ID), signees.toList())
             }
         }.toWireTransaction(), signees)
     }

@@ -23,10 +23,10 @@ abstract class UpgradeClause<in S : ContractState, C : CommandData, in K : Any>(
                 "the signing keys include all participant keys" by keysThatSigned.containsAll(participants)
                 "there is at least one input" by inputs.isNotEmpty()
                 "number of inputs and outputs match" by (inputs.size == outputs.size)
-                "all inputs belong to the legacy contract" by inputs.all { it.contract.javaClass == command.value.contractUpgrade.legacyContract.javaClass }
+                "all inputs belong to the legacy contract" by inputs.all { it.contract.javaClass == command.value.upgradedContract.legacyContract.javaClass }
                 "all inputs are of a suitable type" by outputs.all { it.javaClass == expectedType }
-                "all outputs belong to the upgraded contract" by outputs.all { it.contract.javaClass == command.value.contractUpgrade.upgradedContract.javaClass }
-                "output state must be an upgraded version of the input state" by inputs.zip(outputs).all { it.second == command.value.contractUpgrade.upgrade(it.first) }
+                "all outputs belong to the upgraded contract" by outputs.all { it.contract.javaClass == command.value.upgradedContract.javaClass }
+                "output state must be an upgraded version of the input state" by inputs.zip(outputs).all { it.second == command.value.upgradedContract.upgrade(it.first) }
             }
         }
         return matchedCommands.map { it.value }.toSet()

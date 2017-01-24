@@ -63,15 +63,15 @@ class ContractUpgradeFlowTest {
         requireNotNull(btx)
 
         // The request is expected to be rejected because party B haven't authorise the upgrade yet.
-        val rejectedFuture = a.services.startFlow(ContractUpgradeFlow.Instigator(atx!!.tx.outRef(0), DummyContractUpgrade())).resultFuture
+        val rejectedFuture = a.services.startFlow(ContractUpgradeFlow.Instigator(atx!!.tx.outRef(0), DUMMY_V2_PROGRAM_ID)).resultFuture
         mockNet.runNetwork()
         assertFails { rejectedFuture.get() }
 
         // Party B authorise the contract state upgrade.
-        b.services.vaultService.authoriseUpgrade(btx!!.tx.outRef(0), DummyContractUpgrade())
+        b.services.vaultService.authoriseUpgrade(btx!!.tx.outRef(0), DUMMY_V2_PROGRAM_ID)
 
         // Party A initiate contract upgrade flow, expected to success this time.
-        val resultFuture = a.services.startFlow(ContractUpgradeFlow.Instigator(atx.tx.outRef(0), DummyContractUpgrade())).resultFuture
+        val resultFuture = a.services.startFlow(ContractUpgradeFlow.Instigator(atx.tx.outRef(0), DUMMY_V2_PROGRAM_ID)).resultFuture
         mockNet.runNetwork()
 
         val result = resultFuture.get()
@@ -106,7 +106,7 @@ class ContractUpgradeFlowTest {
         }
         requireNotNull(stateAndRef)
         // Starts contract upgrade flow.
-        a.services.startFlow(ContractUpgradeFlow.Instigator(stateAndRef!!, CashUpgrade()))
+        a.services.startFlow(ContractUpgradeFlow.Instigator(stateAndRef!!, CashV2()))
         mockNet.runNetwork()
         // Get contract state form the vault.
         val state = databaseTransaction(a.database) { a.vault.currentVault.states }
@@ -116,14 +116,9 @@ class ContractUpgradeFlowTest {
         assertEquals(listOf(a.info.legalIdentity.owningKey), (state.first().state.data as CashV2.State).owners, "Upgraded cash belongs to the right owner.")
     }
 
-    // Dummy upgraded Cash Contract object for testing.
-    class CashUpgrade : ContractUpgrade<Cash.State, CashV2.State> {
-        override val legacyContract: Contract get() = Cash()
-        override val upgradedContract: Contract get() = CashV2()
-        override fun upgrade(state: Cash.State) = CashV2.State(state.amount.times(1000), listOf(state.owner))
-    }
+    class CashV2 : UpgradedContract<Cash.State, CashV2.State> {
+        override val legacyContract = Cash()
 
-    class CashV2 : Contract {
         data class State(override val amount: Amount<Issued<Currency>>, val owners: List<CompositeKey>) : FungibleAsset<Currency>, QueryableState {
             override val owner: CompositeKey = owners.first()
             override val exitKeys = (owners + amount.token.issuer.party.owningKey).toSet()
@@ -152,6 +147,8 @@ class ContractUpgradeFlowTest {
             /** Object Relational Mapping support. */
             override fun supportedSchemas(): Iterable<MappedSchema> = listOf(CashSchemaV2)
         }
+
+        override fun upgrade(state: Cash.State) = CashV2.State(state.amount.times(1000), listOf(state.owner))
 
         override fun verify(tx: TransactionForContract) {}
 

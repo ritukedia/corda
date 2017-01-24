@@ -396,6 +396,24 @@ interface NetCommand : CommandData {
     val type: NetType
 }
 
+/** Indicates that this transaction replaces the inputs contract state to another contract state */
+class UpgradeCommand<in OldState : ContractState, out NewState : ContractState>(val upgradedContract: UpgradedContract<OldState, NewState>) : CommandData{
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other?.javaClass != javaClass) return false
+
+        other as UpgradeCommand<*, *>
+
+        if (upgradedContract.javaClass != other.upgradedContract.javaClass) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return upgradedContract.javaClass.name.hashCode()
+    }
+}
+
 /** Wraps an object that was signed by a public key, which may be a well known/recognised institutional key. */
 data class AuthenticatedObject<out T : Any>(
         val signers: List<CompositeKey>,
@@ -451,9 +469,8 @@ interface Contract {
  * more than one state).
  * @param NewState the upgraded contract state.
  */
-interface ContractUpgrade<in OldState : ContractState, out NewState : ContractState> {
+interface UpgradedContract<in OldState : ContractState, out NewState : ContractState> : Contract {
     val legacyContract: Contract
-    val upgradedContract: Contract
     /**
      * Upgrade contract's state object to a new state object.
      *
@@ -463,27 +480,10 @@ interface ContractUpgrade<in OldState : ContractState, out NewState : ContractSt
     fun upgrade(state: OldState): NewState
 }
 
-/** Indicates that this transaction replaces the inputs contract state to another contract state using [contractUpgrade] */
-class UpgradeCommand<in OldState : ContractState, out NewState : ContractState>(val contractUpgrade: ContractUpgrade<OldState, NewState>) : CommandData {
-    // This is needed to make sure ContractUpgrade of the same class equals, ideally ContractUpgrade should be a singleton object.
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other?.javaClass != javaClass) return false
-
-        other as UpgradeCommand<*, *>
-
-        if (contractUpgrade.javaClass != other.contractUpgrade.javaClass) return false
-
-        return true
-    }
-
-    override fun hashCode() = contractUpgrade.javaClass.name.hashCode()
-}
-
 /**
  * Convenience method for upgrading a contract state from state and reference.
  */
-fun <S : ContractState, T : ContractState> ContractUpgrade<S, T>.upgrade(ref: StateAndRef<S>): T = upgrade(ref.state.data)
+fun <S : ContractState, T : ContractState> UpgradedContract<S, T>.upgrade(ref: StateAndRef<S>): T = upgrade(ref.state.data)
 
 /**
  * An attachment is a ZIP (or an optionally signed JAR) that contains one or more files. Attachments are meant to
