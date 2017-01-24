@@ -4,7 +4,6 @@ import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
-import net.corda.core.flows.FlowLogic
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.UntrustworthyData
@@ -20,15 +19,14 @@ import net.corda.flows.ContractUpgradeFlow.Instigator
  * use the new updated state for future transactions.
  */
 object ContractUpgradeFlow {
-    data class Proposal<OldState : ContractState, out NewState : ContractState>(override val stateRef: StateRef,
-                                                                                override val modification: ContractUpgrade<OldState, NewState>,
-                                                                                override val stx: SignedTransaction) : AbstractStateReplacementFlow.Proposal<ContractUpgrade<OldState, NewState>>
+    data class Proposal<in OldState : ContractState, out NewState : ContractState>(override val stateRef: StateRef,
+                                                                                   override val modification: ContractUpgrade<OldState, NewState>,
+                                                                                   override val stx: SignedTransaction) : AbstractStateReplacementFlow.Proposal<ContractUpgrade<OldState, NewState>>
 
     private fun <OldState : ContractState, NewState : ContractState> assembleBareTx(stateRef: StateAndRef<OldState>,
                                                                                     contractUpgrade: ContractUpgrade<OldState, NewState>): TransactionBuilder {
         return TransactionType.General.Builder(stateRef.state.notary).apply {
-            val (upgradedState, command) = contractUpgrade.upgrade(stateRef.state.data)
-            withItems(stateRef, upgradedState, Command(command, stateRef.state.data.participants))
+            withItems(stateRef, contractUpgrade.upgrade(stateRef.state.data), Command(ContractUpgrade.Command(contractUpgrade), stateRef.state.data.participants))
         }
     }
 
@@ -50,12 +48,16 @@ object ContractUpgradeFlow {
         override fun verifyProposal(maybeProposal: UntrustworthyData<AbstractStateReplacementFlow.Proposal<ContractUpgrade<ContractState, ContractState>>>) = maybeProposal.unwrap { proposal ->
             val stx = serviceHub.storageService.validatedTransactions.getTransaction(proposal.stateRef.txhash) ?: throw IllegalStateException("We don't have a copy of the referenced state")
             val state = stx.tx.outRef<ContractState>(proposal.stateRef.index)
-            val acceptedUpgrade = serviceHub.vaultService.getAcceptedContractStateUpgrade(state) ?: throw IllegalStateException("Contract state upgrade is unauthorised. State hash : ${state.ref}")
+            val authorisedUpgrade = serviceHub.vaultService.getAuthorisedUpgrade(state) ?: throw IllegalStateException("Contract state upgrade is unauthorised. State hash : ${state.ref}")
             val actualTx = proposal.stx.tx
             val expectedTx = assembleBareTx(state, proposal.modification).toWireTransaction()
             requireThat {
-                "the proposed upgrade ${proposal.modification} is a trusted upgrade path" by (proposal.modification.javaClass == acceptedUpgrade.javaClass)
+                "the instigator is one of the participants" by (state.state.data.participants.contains(otherSide.owningKey))
+                "the proposed upgrade ${proposal.modification} is a trusted upgrade path" by (proposal.modification.javaClass == authorisedUpgrade.javaClass)
                 "the proposed tx matches the expected tx for this upgrade" by (actualTx == expectedTx)
+                "number of inputs and outputs match" by (proposal.stx.tx.inputs.size == proposal.stx.tx.outputs.size)
+                "input belongs to the legacy contract" by (state.state.data.contract.javaClass == proposal.modification.legacyContract.javaClass)
+                "output belongs to the upgraded contract" by proposal.stx.tx.outputs.all { it.data.contract.javaClass == proposal.modification.upgradedContract.javaClass }
             }
             proposal
         }

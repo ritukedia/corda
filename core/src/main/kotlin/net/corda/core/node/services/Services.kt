@@ -147,10 +147,6 @@ interface VaultService {
         return refs.associateBy({ it }) { refsToStates[it]?.state }
     }
 
-    fun stateForRef(ref: StateRef): TransactionState<*>? {
-        return currentVault.states.find { it.ref == ref }?.state
-    }
-
     /**
      * Possibly update the vault by marking as spent states that these transactions consume, and adding any relevant
      * new states that they create. You should only insert transactions that have been successfully verified here!
@@ -171,9 +167,9 @@ interface VaultService {
 
     /** Get contracts we would be willing to upgrade the suggested contract to. */
     // TODO: We need a better place to put business logic functions
-    fun getAcceptedContractStateUpgrade(old: StateAndRef<ContractState>): ContractUpgrade<ContractState, ContractState>?
+    fun getAuthorisedUpgrade(state: StateAndRef<ContractState>): ContractUpgrade<ContractState, ContractState>?
     /** Attempt to upgrade the given contract to a newer version. */
-    fun <S : ContractState, T : ContractState> acceptContractStateUpgrade(state: StateAndRef<S>, upgrade: ContractUpgrade<S, T>)
+    fun <S : ContractState, T : ContractState> authoriseUpgrade(state: StateAndRef<S>, upgrade: ContractUpgrade<S, T>)
 
     /**
      *  Add a note to an existing [LedgerTransaction] given by its unique [SecureHash] id

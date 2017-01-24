@@ -5,12 +5,10 @@ import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.SecureHash
-import net.corda.core.node.recordTransactions
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.QueryableState
 import net.corda.core.serialization.OpaqueBytes
-import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import net.corda.core.utilities.Emoji
 import net.corda.flows.*
 import net.corda.node.utilities.databaseTransaction
@@ -54,13 +52,9 @@ class ContractUpgradeFlowTest {
         val twoPartyDummyContract = DummyContract.generateInitial(0, notary, a.info.legalIdentity.ref(1), b.info.legalIdentity.ref(1))
         val stx = twoPartyDummyContract.signWith(a.services.legalIdentityKey)
                 .signWith(b.services.legalIdentityKey)
-                .signWith(DUMMY_NOTARY_KEY)
                 .toSignedTransaction()
 
-        databaseTransaction(a.database) { a.services.recordTransactions(stx) }
-        databaseTransaction(b.database) { b.services.recordTransactions(stx) }
-
-        a.services.startFlow(ResolveTransactionsFlow(setOf(stx.id), a.info.legalIdentity))
+        a.services.startFlow(FinalityFlow(stx, setOf(a.info.legalIdentity, b.info.legalIdentity)))
         mockNet.runNetwork()
 
         val atx = databaseTransaction(a.database) { a.services.storageService.validatedTransactions.getTransaction(stx.id) }
@@ -68,13 +62,13 @@ class ContractUpgradeFlowTest {
         requireNotNull(atx)
         requireNotNull(btx)
 
-        // The request is expected to be rejected because party B haven't accepted upgrade yet.
+        // The request is expected to be rejected because party B haven't authorise the upgrade yet.
         val rejectedFuture = a.services.startFlow(ContractUpgradeFlow.Instigator(atx!!.tx.outRef(0), DummyContractUpgrade())).resultFuture
         mockNet.runNetwork()
         assertFails { rejectedFuture.get() }
 
-        // Party B accept to upgrade the contract state.
-        b.services.vaultService.acceptContractStateUpgrade(btx!!.tx.outRef(0), DummyContractUpgrade())
+        // Party B authorise the contract state upgrade.
+        b.services.vaultService.authoriseUpgrade(btx!!.tx.outRef(0), DummyContractUpgrade())
 
         // Party A initiate contract upgrade flow, expected to success this time.
         val resultFuture = a.services.startFlow(ContractUpgradeFlow.Instigator(atx.tx.outRef(0), DummyContractUpgrade())).resultFuture
@@ -82,29 +76,21 @@ class ContractUpgradeFlowTest {
 
         val result = resultFuture.get()
 
-        val updateTX_A = databaseTransaction(a.database) { a.services.storageService.validatedTransactions.getTransaction(result.ref.txhash) }
-        val updateTX_B = databaseTransaction(b.database) { b.services.storageService.validatedTransactions.getTransaction(result.ref.txhash) }
+        listOf(a, b).forEach {
+            val stx = databaseTransaction(a.database) { a.services.storageService.validatedTransactions.getTransaction(result.ref.txhash) }
+            requireNotNull(stx)
 
-        requireNotNull(updateTX_A)
-        requireNotNull(updateTX_B)
+            // Verify inputs.
+            assertTrue(stx!!.tx.inputs.size == 1)
+            val input = databaseTransaction(a.database) { a.services.storageService.validatedTransactions.getTransaction(stx.tx.inputs.first().txhash) }
+            requireNotNull(input)
+            assertTrue(input!!.tx.outputs.size == 1)
+            assertTrue(input.tx.outputs.first().data is DummyContract.State)
 
-        // Verify inputs.
-        assertTrue(updateTX_A!!.tx.inputs.size == 1)
-        assertTrue(updateTX_B!!.tx.inputs.size == 1)
-        val input_A = databaseTransaction(a.database) { a.services.storageService.validatedTransactions.getTransaction(updateTX_A.tx.inputs.first().txhash) }
-        val input_B = databaseTransaction(b.database) { b.services.storageService.validatedTransactions.getTransaction(updateTX_B.tx.inputs.first().txhash) }
-        requireNotNull(input_A)
-        requireNotNull(input_B)
-        assertTrue(input_A!!.tx.outputs.size == 1)
-        assertTrue(input_B!!.tx.outputs.size == 1)
-        assertTrue(input_A.tx.outputs.first().data is DummyContract.State)
-        assertTrue(input_B.tx.outputs.first().data is DummyContract.State)
-
-        // Verify outputs.
-        assertTrue(updateTX_A.tx.outputs.size == 1)
-        assertTrue(updateTX_B.tx.outputs.size == 1)
-        assertTrue(updateTX_A.tx.outputs.first().data is DummyContractV2.State)
-        assertTrue(updateTX_B.tx.outputs.first().data is DummyContractV2.State)
+            // Verify outputs.
+            assertTrue(stx.tx.outputs.size == 1)
+            assertTrue(stx.tx.outputs.first().data is DummyContractV2.State)
+        }
     }
 
     @Test
@@ -132,19 +118,12 @@ class ContractUpgradeFlowTest {
 
     // Dummy upgraded Cash Contract object for testing.
     class CashUpgrade : ContractUpgrade<Cash.State, CashV2.State> {
-        override fun upgrade(state: Cash.State): Pair<CashV2.State, CashV2.Commands.Upgrade> {
-            val newContractState = CashV2.State(state.amount.times(1000), listOf(state.owner))
-            return Pair(newContractState, CashV2.Commands.Upgrade(state, newContractState))
-        }
+        override val legacyContract: Contract get() = Cash()
+        override val upgradedContract: Contract get() = CashV2()
+        override fun upgrade(state: Cash.State) = CashV2.State(state.amount.times(1000), listOf(state.owner))
     }
 
     class CashV2 : Contract {
-        interface Commands : CommandData {
-            data class Upgrade(override val oldContractState: Cash.State, override val newContractState: CashV2.State) : UpgradeCommand<Cash.State, CashV2.State>, Commands {
-                override val upgrade = CashUpgrade()
-            }
-        }
-
         data class State(override val amount: Amount<Issued<Currency>>, val owners: List<CompositeKey>) : FungibleAsset<Currency>, QueryableState {
             override val owner: CompositeKey = owners.first()
             override val exitKeys = (owners + amount.token.issuer.party.owningKey).toSet()
