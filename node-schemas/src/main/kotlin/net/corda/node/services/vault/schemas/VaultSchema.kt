@@ -1,6 +1,7 @@
 package net.corda.node.services.vault.schemas
 
 import io.requery.*
+import net.corda.core.node.services.Vault
 import net.corda.core.schemas.requery.converters.InstantConverter
 import java.time.Instant
 import java.util.*
@@ -8,7 +9,7 @@ import java.util.*
 object VaultSchema {
 
     @Table(name = "vault_transaction_notes")
-    @Entity
+    @Entity(model = "vault")
     interface VaultTxnNote : Persistable {
 
         @get:Key
@@ -16,7 +17,6 @@ object VaultSchema {
         @get:Column(name = "seq_no", index = true)
         var seqNo: Int
 
-//        @get:Index
         @get:Column(name = "transaction_id", length = 64, index = true)
         var txId: String
 
@@ -25,7 +25,7 @@ object VaultSchema {
     }
 
     @Table(name = "vault_cash_balances")
-    @Entity
+    @Entity(model = "vault")
     interface VaultCashBalances : Persistable {
         @get:Key
         @get:Column(name = "currency_code", length = 3)
@@ -35,9 +35,8 @@ object VaultSchema {
         var amount: Long
     }
 
-     @Table(name = "vault_states")
-//    @Entity(model = "vault")
-    @Entity
+    @Table(name = "vault_states")
+    @Entity(model = "vault")
     interface VaultStates : Requery.PersistentState {
 
         @get:Column(name = "notary_name")
@@ -52,7 +51,7 @@ object VaultSchema {
         var contractState: ByteArray
 
         @get:Column(name = "state_status")
-        var stateStatus: StateStatus
+        var stateStatus: Vault.StateStatus
 
         // refers to timestamp recorded upon entering AWAITING_CONSENSUS state
         @get:Column(name = "committed")
@@ -73,42 +72,49 @@ object VaultSchema {
         var lockId: String
     }
 
-    enum class StateStatus {
-        AWAITING_CONSENSUS, CONSENSUS_AGREED_UNCONSUMED, CONSENSUS_AGREED_CONSUMED
-    }
-
     @Table(name = "vault_consumed_fungible_states")
-//    @Entity(model = "vault")
-//    @Entity
+    @Entity(model = "vault")
     interface VaultFungibleState : Requery.PersistentState {
 
-        @get:OneToMany(mappedBy = "key")
-        var participants: VaultKey
+        // TODO: 1:1 and 1:m uni-directional relationship mapping code generation not working in Requery
 
-        @get:OneToOne(mappedBy = "key")
-        var ownerKey: VaultKey
+//        @get:OneToMany(mappedBy = "key")
+//        var participants: List<VaultKey>
 
+//        @get:OneToOne(mappedBy = "key")
+//        var ownerKey: VaultKey
+        @get:Column(name = "owner_key")
+        var ownerKey: String
+
+        @get:Column(name = "quantity")
         var quantity: Long
+        @get:Column(name = "currency", length = 3 )
         var ccyCode: String
 
-        @get:OneToOne(mappedBy = "key")
-        var issuerKey: VaultKey
+//        @get:OneToOne(mappedBy = "key")
+//        var issuerKey: VaultKey
+        @get:Column(name = "issuer_key")
+        var issuerKey: String
+        @get:Column(name = "issuer_reference", length = 3 )
         var issuerRef: ByteArray
 
-        @get:OneToMany(mappedBy = "key")
-        var exitKeys: VaultKey
+//        @get:OneToMany(mappedBy = "key")
+//        var exitKeys: List<VaultKey>
     }
 
     @Table(name = "vault_consumed_linear_states")
-//    @Entity(model = "vault")
-//    @Entity
+    @Entity(model = "vault")
     interface VaultLinearState : Requery.PersistentState {
 
-        @get:OneToMany(mappedBy = "key")
-        var participants: VaultKey
+        // TODO: 1:1 and 1:m uni-directional relationship mapping code generation not working in Requery
 
-        @get:OneToOne(mappedBy = "key")
-        var ownerKey: VaultKey
+//        @get:OneToMany(mappedBy = "key")
+//        var participants: List<VaultKey>
+
+//        @get:OneToOne(mappedBy = "key")
+//        var ownerKey: VaultKey
+        @get:Column(name = "owner_key")
+        var ownerKey: String
 
         @get:Index("externalId_index")
         var externalId: String
@@ -116,13 +122,13 @@ object VaultSchema {
         var uuid: UUID
 
         var dealRef: String
-        @get:OneToMany(mappedBy = "name")
-        var dealParties: VaultParty
+
+//        @get:OneToMany(mappedBy = "name")
+//        var dealParties: List<VaultParty>
     }
 
     @Table(name = "vault_keys")
 //    @Entity(model = "vault")
-//    @Entity
     interface VaultKey : Persistable {
         @get:Key
         @get:Generated
@@ -136,7 +142,6 @@ object VaultSchema {
 
     @Table(name = "vault_parties")
 //    @Entity(model = "vault")
-//    @Entity
     interface VaultParty : Persistable {
         @get:Key
         @get:Generated

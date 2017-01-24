@@ -2,6 +2,7 @@ package net.corda.node.services.vault
 
 import com.google.common.collect.Sets
 import com.r3corda.node.services.database.RequeryConfiguration
+import io.requery.kotlin.`in`
 import io.requery.kotlin.eq
 import net.corda.contracts.asset.Cash
 import net.corda.core.ThreadBox
@@ -13,6 +14,7 @@ import net.corda.core.crypto.SecureHash
 import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultService
+import net.corda.core.node.services.unconsumedStates
 import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.serialize
@@ -47,8 +49,8 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         val log = loggerFor<NodeVaultService>()
     }
 
-    val configuration = RequeryConfiguration()
-    val session = configuration.sessionForModel(Models.DEFAULT)
+    val configuration = RequeryConfiguration
+    val session = configuration.sessionForModel(Models.VAULT)
 
     private val mutex = ThreadBox(content = object {
 
@@ -73,7 +75,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
                         val state = VaultStatesEntity()
                         state.txId = it.key.txhash.toString()
                         state.index = it.key.index
-                        state.stateStatus = VaultSchema.StateStatus.CONSENSUS_AGREED_UNCONSUMED
+                        state.stateStatus = Vault.StateStatus.CONSENSUS_AGREED_UNCONSUMED
                         state.contractStateClassName = it.value.state.data.javaClass.toString()
                         state.contractState = it.value.state.serialize().bytes
                         state.notaryName = it.value.state.notary.name
@@ -86,7 +88,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
                         val key = io.requery.proxy.CompositeKey(keys)
                         val state = findByKey(VaultStatesEntity::class, key)
                         state?.let {
-                            state.stateStatus = VaultSchema.StateStatus.CONSENSUS_AGREED_CONSUMED
+                            state.stateStatus = Vault.StateStatus.CONSENSUS_AGREED_CONSUMED
                             state.consumed = Instant.now()
                             update(state)
                         }
@@ -146,17 +148,15 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
 
     override fun track(): Pair<Vault, Observable<Vault.Update>> {
         return mutex.locked {
-            Pair(Vault(allUnconsumedStates()), _updatesPublisher.bufferUntilSubscribed().wrapWithDatabaseTransaction())
+            Pair(Vault(unconsumedStates<ContractState>()), _updatesPublisher.bufferUntilSubscribed().wrapWithDatabaseTransaction())
         }
     }
 
-    private fun allUnconsumedStates(): List<StateAndRef<ContractState>> = unconsumedStates(ContractState::class.java)
-
-    override fun <T: ContractState> unconsumedStates(clazz: Class<T>): List<StateAndRef<T>> {
+    override fun <T: ContractState> states(clazz: Class<T>, statuses: Set<Vault.StateStatus>): List<StateAndRef<T>> {
         val stateAndRefs =
                 session.invoke {
                     val result = select(VaultSchema.VaultStates::class)
-                            .where(VaultSchema.VaultStates::stateStatus eq VaultSchema.StateStatus.CONSENSUS_AGREED_UNCONSUMED)
+                            .where(VaultSchema.VaultStates::stateStatus `in` statuses)
                     result.get()
                             .map { it ->
                                 val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
@@ -170,21 +170,13 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         return stateAndRefs
     }
 
-    /**
-     * Returns a snapshot of the heads of LinearStates.
-     *
-     * TODO: Represent this using an actual JDBCHashMap or look at vault design further.
-     */
-    override val linearHeads: Map<UniqueIdentifier, StateAndRef<LinearState>>
-        get() = allUnconsumedStates().filterStatesOfType<LinearState>().associateBy { it.state.data.linearId }.mapValues { it.value }
-
     override fun statesForRefs(refs: List<StateRef>): Map<StateRef, TransactionState<*>?> {
         val stateAndRefs =
                 session.invoke {
                     var results: List<StateAndRef<*>> = emptyList()
                     refs.forEach {
                         val result = select(VaultSchema.VaultStates::class)
-                                .where(VaultSchema.VaultStates::stateStatus eq VaultSchema.StateStatus.CONSENSUS_AGREED_UNCONSUMED)
+                                .where(VaultSchema.VaultStates::stateStatus eq Vault.StateStatus.CONSENSUS_AGREED_UNCONSUMED)
                                 .and(VaultSchema.VaultStates::txId eq it.txhash.toString())
                                 .and(VaultSchema.VaultStates::index eq it.index)
                         result.get()?.each {
@@ -262,7 +254,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         //
         // Finally, we add the states to the provided partial transaction.
 
-        val assetsStates = unconsumedStates<Cash.State>(Cash.State::class.java)
+        val assetsStates = unconsumedStates<Cash.State>()
 
         val currency = amount.token
         var acceptableCoins = run {
@@ -363,7 +355,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         // a new collection and instead contains() just checks the contains() of both parameters, and so we don't end up
         // iterating over all (a potentially very large) unconsumedStates at any point.
         mutex.locked {
-            val unconsumedStates = unconsumedStates(ContractState::class.java).toSet() as Set<ContractState>
+            val unconsumedStates = unconsumedStates<ContractState>().toSet() as Set<ContractState>
             consumedRefs.retainAll(Sets.union(netDelta.produced, unconsumedStates))
         }
 

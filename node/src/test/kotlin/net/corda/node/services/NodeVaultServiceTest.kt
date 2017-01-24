@@ -9,6 +9,7 @@ import net.corda.core.contracts.`issued by`
 import net.corda.core.crypto.composite
 import net.corda.core.node.services.TxWritableStorageService
 import net.corda.core.node.services.VaultService
+import net.corda.core.node.services.unconsumedStates
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.LogHelper
@@ -61,7 +62,7 @@ class NodeVaultServiceTest {
             }
             services1.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
 
-            val w1 = services1.vaultService.unconsumedStates(Cash.State::class.java)
+            val w1 = services1.vaultService.unconsumedStates<Cash.State>()
             assertThat(w1).hasSize(3)
 
             val originalStorage = services1.storageService
@@ -80,7 +81,7 @@ class NodeVaultServiceTest {
                 }
             }
 
-            val w2 = services2.vaultService.unconsumedStates(Cash.State::class.java)
+            val w2 = services2.vaultService.unconsumedStates<Cash.State>()
             assertThat(w2).hasSize(3)
         }
     }
@@ -100,7 +101,7 @@ class NodeVaultServiceTest {
             }
             services1.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
 
-            val w1 = services1.vaultService.unconsumedStates(Cash.State::class.java)
+            val w1 = services1.vaultService.unconsumedStates<Cash.State>()
             assertThat(w1).hasSize(3)
 
             val stateRefs = listOf(w1[1].ref, w1[2].ref)
@@ -151,4 +152,64 @@ class NodeVaultServiceTest {
             assertEquals(1, services.vaultService.getTransactionNotes(anotherTX.id).count())
         }
     }
+
+    @Test
+    fun observableUpdatesPriorCommit() {
+        // rawUpdate
+    }
+
+    @Test
+    fun observableUpdatesAfterCommit() {
+        // update
+    }
+
+    @Test
+    fun snapshotAndObservableUpdates() {
+        // track
+    }
+
+    @Test
+    fun cashBalances() {
+
+    }
+
+    @Test
+    fun notifyOfTxnUpdate() {
+        // internal API call
+    }
+
+    @Test
+    fun whenConsumed() {
+        // utility function
+    }
+
+    /**
+     * Extension functions
+     */
+
+    @Test
+    fun consumedStates() {
+
+    }
+
+    @Test
+    fun unConsumedStates() {
+
+    }
+
+    @Test
+    fun linearHeads() {
+
+    }
+
+    @Test
+    fun linearHeadsOfType() {
+
+    }
+
+    @Test
+    fun dealsWith() {
+
+    }
+
 }

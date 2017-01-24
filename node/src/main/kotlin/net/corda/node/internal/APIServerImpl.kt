@@ -7,6 +7,7 @@ import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.TransactionState
 import net.corda.core.crypto.DigitalSignature
 import net.corda.core.crypto.SecureHash
+import net.corda.core.node.services.linearHeads
 import net.corda.core.node.services.linearHeadsOfType
 import net.corda.core.serialization.SerializedBytes
 import net.corda.core.transactions.SignedTransaction

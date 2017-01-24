@@ -13,6 +13,7 @@ import net.corda.core.crypto.signWithECDSA
 import net.corda.core.flows.FlowLogic
 import net.corda.core.node.PluginServiceHub
 import net.corda.core.node.ServiceHub
+import net.corda.core.node.services.unconsumedStates
 import net.corda.core.transactions.SignedTransaction
 import net.corda.flows.FinalityFlow
 import net.corda.flows.ResolveTransactionsFlow
@@ -41,7 +42,7 @@ private fun gatherOurInputs(serviceHub: ServiceHub,
                             amountRequired: Amount<Issued<Currency>>,
                             notary: Party?): Pair<List<StateAndRef<Cash.State>>, Long> {
     // Collect cash type inputs
-    val cashStates = serviceHub.vaultService.unconsumedStates(Cash.State::class.java)
+    val cashStates = serviceHub.vaultService.unconsumedStates<Cash.State>()
     // extract our key identity for convenience
     val ourKey = serviceHub.myInfo.legalIdentity.owningKey
     // Filter down to our own cash states with right currency and issuer

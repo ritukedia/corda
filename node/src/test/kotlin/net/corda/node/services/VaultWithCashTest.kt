@@ -7,6 +7,7 @@ import net.corda.core.contracts.*
 import net.corda.core.crypto.composite
 import net.corda.core.node.recordTransactions
 import net.corda.core.node.services.VaultService
+import net.corda.core.node.services.unconsumedStates
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
@@ -68,7 +69,7 @@ class VaultWithCashTest {
             // Fix the PRNG so that we get the same splits every time.
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
 
-            val w = vault.unconsumedStates(Cash.State::class.java)
+            val w = vault.unconsumedStates<Cash.State>()
             assertEquals(3, w.toList().size)
 
             val state = w.toList()[0].state.data
@@ -157,7 +158,7 @@ class VaultWithCashTest {
             dummyIssue.toLedgerTransaction(services).verify()
 
             services.recordTransactions(dummyIssue)
-            assertEquals(1, vault.unconsumedStates(DummyLinearContract.State::class.java).toList().size)
+            assertEquals(1, vault.unconsumedStates<DummyLinearContract.State>().size)
 
             // Move the same state
             val dummyMove = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
@@ -169,7 +170,7 @@ class VaultWithCashTest {
             dummyIssue.toLedgerTransaction(services).verify()
 
             services.recordTransactions(dummyMove)
-            assertEquals(1, vault.unconsumedStates(DummyLinearContract.State::class.java).toList().size)
+            assertEquals(1, vault.unconsumedStates<DummyLinearContract.State>().size)
         }
     }
 }

@@ -8,6 +8,7 @@ import net.corda.core.crypto.keys
 import net.corda.core.crypto.toStringShort
 import net.corda.core.flows.FlowLogic
 import net.corda.core.flows.StateMachineRunId
+import net.corda.core.node.services.unconsumedStates
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
@@ -75,7 +76,7 @@ class CashFlow(val command: CashCommand, override val progressTracker: ProgressT
         try {
             val issuer = PartyAndReference(serviceHub.myInfo.legalIdentity, req.issueRef)
             Cash().generateExit(builder, req.amount.issuedBy(issuer),
-                    serviceHub.vaultService.unconsumedStates(Cash.State::class.java).filter { it.state.data.owner == issuer.party.owningKey })
+                    serviceHub.vaultService.unconsumedStates<Cash.State>().filter { it.state.data.owner == issuer.party.owningKey })
             val myKey = serviceHub.legalIdentityKey
             builder.signWith(myKey)
 

@@ -4,16 +4,19 @@ import io.requery.Persistable
 import io.requery.TransactionIsolation
 import io.requery.kotlin.eq
 import io.requery.kotlin.invoke
+import io.requery.rx.KotlinRxEntityStore
 import io.requery.sql.KotlinConfiguration
 import io.requery.sql.KotlinEntityDataStore
 import io.requery.sql.SchemaModifier
 import io.requery.sql.TableCreationMode
-import junit.framework.Assert.assertEquals
 import net.corda.core.contracts.*
 import net.corda.core.crypto.*
+import net.corda.core.node.services.Vault
+import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.serialize
 import net.corda.core.transactions.LedgerTransaction
+import net.corda.core.utilities.DUMMY_KEY_1
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import org.h2.jdbcx.JdbcDataSource
@@ -21,12 +24,17 @@ import org.junit.After
 import org.junit.Assert
 import org.junit.Before
 import org.junit.Test
+import rx.Observable
 import java.security.KeyPair
 import java.time.Instant
+import java.util.*
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-// Re-defined from test-utils module (which currently depdens and forces re-compile of finance, core, node modules)
+// Re-defined from test-utils module (which currently depends and forces re-compilation of finance, core, node modules)
 val ALICE_KEY: KeyPair by lazy { generateKeyPair() }
 val ALICE_PUBKEY: CompositeKey get() = ALICE_KEY.public.composite
 val ALICE: Party get() = Party("Alice", ALICE_PUBKEY)
@@ -42,6 +50,9 @@ class VaultSchemaTest {
     var instance : KotlinEntityDataStore<Persistable>? = null
     val data : KotlinEntityDataStore<Persistable> get() = instance!!
 
+    var oinstance : KotlinRxEntityStore<Persistable>? = null
+    val odata : KotlinRxEntityStore<Persistable> get() = oinstance!!
+
     var transaction : LedgerTransaction? = null
 
     @Before
@@ -51,8 +62,9 @@ class VaultSchemaTest {
         dataSource.user = "sa"
         dataSource.password = "sa"
 
-        val configuration = KotlinConfiguration(dataSource = dataSource, model = Models.DEFAULT, useDefaultLogging = true)
+        val configuration = KotlinConfiguration(dataSource = dataSource, model = Models.VAULT, useDefaultLogging = true)
         instance = KotlinEntityDataStore<Persistable>(configuration)
+        oinstance = KotlinRxEntityStore(KotlinEntityDataStore<Persistable>(configuration))
         val tables = SchemaModifier(configuration)
         val mode = TableCreationMode.DROP_CREATE
         tables.createTables(mode)
@@ -64,6 +76,23 @@ class VaultSchemaTest {
     @After
     fun tearDown() {
         data.close()
+    }
+
+    class VaultNoopContract() : Contract {
+        override val legalContractReference = SecureHash.sha256("")
+        data class VaultNoopState(override val owner: CompositeKey) : OwnableState {
+            override val contract = VaultNoopContract()
+            override val participants: List<CompositeKey>
+                get() = listOf(owner)
+            override fun withNewOwner(newOwner: CompositeKey) = Pair(Commands.Create(), copy(owner = newOwner))
+        }
+        interface Commands : CommandData {
+            class Create : TypeOnlyCommandData(), Commands
+        }
+
+        override fun verify(tx: TransactionForContract) {
+            // Always accepts.
+        }
     }
 
     fun setupDummyData() {
@@ -129,44 +158,39 @@ class VaultSchemaTest {
 
     @Test
     fun testUpsertConsumedState() {
-
         val stateEntity = createStateEntity(transaction!!.inputs[0])
         data.invoke {
             insert(stateEntity)
         }
-
         val keys = mapOf(   VaultStatesEntity.TX_ID to stateEntity.txId,
                             VaultStatesEntity.INDEX to stateEntity.index)
         val key = io.requery.proxy.CompositeKey(keys)
-
         data.invoke {
             val state = findByKey(VaultStatesEntity::class, key)
             assertNotNull(state)
             state?.let {
-                state.stateStatus = VaultSchema.StateStatus.CONSENSUS_AGREED_CONSUMED
+                state.stateStatus = Vault.StateStatus.CONSENSUS_AGREED_CONSUMED
                 state.consumed = Instant.now()
                 update(state)
-
                 val result = select(VaultSchema.VaultStates::class) //where (VaultSchema.VaultStates::txId eq state.txId) limit 10
-                assertEquals(VaultSchema.StateStatus.CONSENSUS_AGREED_CONSUMED, result().first().stateStatus)
+                assertEquals(Vault.StateStatus.CONSENSUS_AGREED_CONSUMED, result().first().stateStatus)
             }
         }
     }
 
     @Test
     fun testTransactionalUpsertState() {
-//        data.withTransaction(TransactionIsolation.REPEATABLE_READ) {
-        data.invoke {
+        data.withTransaction(TransactionIsolation.REPEATABLE_READ) {
+//        data.invoke {
             transaction!!.inputs.forEach {
                 val stateEntity = createStateEntity(it)
                 insert(stateEntity)
             }
-            val result = select(VaultSchema.VaultStates::class) //where (VaultSchema.VaultStates::txId eq state.txId) limit 10
+            val result = select(VaultSchema.VaultStates::class)
             Assert.assertSame(3, result().toList().size)
         }
-
         data.invoke {
-            val result = select(VaultSchema.VaultStates::class) //where (VaultSchema.VaultStates::txId eq state.txId) limit 10
+            val result = select(VaultSchema.VaultStates::class)
             Assert.assertSame(3, result().toList().size)
         }
     }
@@ -174,11 +198,10 @@ class VaultSchemaTest {
     private fun createStateEntity(stateAndRef: StateAndRef<*>): VaultStatesEntity {
         val stateRef = stateAndRef.ref
         val state = stateAndRef.state
-
         val stateEntity = VaultStatesEntity()
         stateEntity.txId = stateRef.txhash.toString()
         stateEntity.index = stateRef.index
-        stateEntity.stateStatus = VaultSchema.StateStatus.CONSENSUS_AGREED_UNCONSUMED
+        stateEntity.stateStatus = Vault.StateStatus.CONSENSUS_AGREED_UNCONSUMED
         stateEntity.contractStateClassName = state.data.javaClass.toString()
         stateEntity.contractState = state.serialize().bytes
         stateEntity.notaryName = state.notary.name
@@ -196,7 +219,7 @@ class VaultSchemaTest {
         txnNoteEntity.note = "Sample transaction note"
         data.invoke {
             insert(txnNoteEntity)
-            val result = select(VaultSchema.VaultTxnNote::class) //where (VaultSchema.VaultStates::txId eq state.txId) limit 10
+            val result = select(VaultSchema.VaultTxnNote::class)
             Assert.assertSame(txnNoteEntity, result().first())
         }
     }
@@ -213,7 +236,6 @@ class VaultSchemaTest {
             insert(txnNoteEntity)
             insert(txnNoteEntity2)
         }
-
         data.invoke {
             val result = select(VaultSchema.VaultTxnNote::class) where (VaultSchema.VaultTxnNote::txId eq txnNoteEntity2.txId)
             assertEquals(result().count(), 1)
@@ -231,7 +253,7 @@ class VaultSchemaTest {
         cashBalanceEntity.amount = 12345
         data.invoke {
             insert(cashBalanceEntity)
-            val result = select(VaultSchema.VaultCashBalances::class) //where (VaultSchema.VaultStates::txId eq state.txId) limit 10
+            val result = select(VaultSchema.VaultCashBalances::class)
             Assert.assertSame(cashBalanceEntity, result().first())
         }
     }
@@ -251,8 +273,7 @@ class VaultSchemaTest {
             state?.let {
                 state.amount += 10000
                 update(state)
-
-                val result = select(VaultCashBalancesEntity::class) //where (VaultSchema.VaultStates::txId eq state.txId) limit 10
+                val result = select(VaultCashBalancesEntity::class)
                 assertEquals(22345, result().first().amount)
             }
         }
@@ -277,121 +298,76 @@ class VaultSchemaTest {
     /**
      *  Vault Schema: VaultFungibleState
      */
-//    @Test
-//    fun testInsertFungibleState() {
-//
-//        val fstate = VaultFungibleStateEntity()
-//        fstate.txId = "12345"
-//        fstate.index = 0
-//
-//        val ownerKey = VaultKeyEntity()
-//        ownerKey.txId = fstate.txId + 1
-//        ownerKey.index = fstate.index!! + 1
-//        ownerKey.key = "ownerKey"
-//
-//        val issuerKey = VaultKeyEntity()
-//        issuerKey.txId = fstate.txId + 2
-//        issuerKey.index = fstate.index!! + 2
-//        issuerKey.key = "issuerKey"
-//
-//        fstate.ownerKey = ownerKey
-//        fstate.issuerKey = issuerKey
+    @Test
+    fun testInsertFungibleState() {
+
+        val fstate = VaultFungibleStateEntity()
+        fstate.txId = "12345"
+        fstate.index = 0
+
+        fstate.ownerKey = DUMMY_KEY_1.toString()
+
+        // TODO: 1:1 and 1:m uni-directional relationship mapping code generation not working in Requery
 //        fstate.participants = setOf()
+//        val ownerKey = VaultKeyEntity()
+//        ownerKey.id =
+//        ownerKey.key
+//        val issuerKey = VaultKeyEntity()
+//        issuerKey.id =
+//        issuerKey.key =
 //        fstate.exitKeys = setOf()
-//
-//        data.invoke {
-//            insert(fstate)
-//            val result = select(VaultSchema.VaultFungibleState::class) where (VaultSchema.VaultFungibleState::txId eq fstate.txId) limit 10
-//            Assert.assertSame(fstate, result().first())
-//        }
-//    }
-//
-//    /**
-//     *  Vault Schema: VaultLinearState
-//     */
-//    @Test
-//    fun testInsertLinearState() {
-//
-//        val lstate = VaultLinearStateEntity()
-//        lstate.txId = "12345"
-//        lstate.index = 0
-//        lstate.uuid = UUID.randomUUID()
-//        data.invoke {
-//            insert(lstate)
-//            val result = select(VaultSchema.VaultFungibleState::class) where (VaultSchema.VaultFungibleState::txId eq lstate.txId) limit 10
-//            Assert.assertSame(lstate, result().first())
-//
-//        }
-//    }
 
-//    @Test
-//    fun testUnConsumedStates() {
-//        val clazzName = "net.corda.core.contracts.DummyContract\$SingleOwnerState"
-//        val stateAndRefs = unconsumedStates(Class.forName(clazzName) as Class<ContractState>)
-//        assertNotNull(stateAndRefs)
-//        assertTrue { stateAndRefs.size > 0 }
-//        stateAndRefs.forEach {
-//            println("ref  : ${it.ref}")
-//            println("state: ${it.state}")
-//        }
-//    }
-//
-//    fun <T: ContractState> unconsumedStates(clazz: Class<T>): List<StateAndRef<T>> {
-//        data.invoke {
-//            transaction!!.inputs.forEach {
-//                insert(createStateEntity(it))
-//            }
-//        }
-//        val stateAndRefs =
-//            data.invoke {
-//                val result = select(VaultSchema.VaultStates::class)
-//                        .where(VaultSchema.VaultStates::stateStatus eq VaultSchema.StateStatus.CONSENSUS_AGREED_UNCONSUMED)
-////                            .and(Class.forName(VaultSchema.VaultStates::contractStateClassName).isInstance(T) eq true)
-//                result.get().stream().map { it ->
-//                    val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
-//                    val state = it.contractState.deserialize<TransactionState<T>>()
-//                    StateAndRef(state, stateRef)
-//                }.toList()
-//            }
-//        return stateAndRefs
-//    }
+        fstate.quantity = 250000
+        fstate.ccyCode = "GBP"
 
-    class VaultNoopContract() : Contract {
-        override val legalContractReference = SecureHash.sha256("")
-        data class VaultNoopState(override val owner: CompositeKey) : OwnableState {
-            override val contract = VaultNoopContract()
-            override val participants: List<CompositeKey>
-                get() = listOf(owner)
-            override fun withNewOwner(newOwner: CompositeKey) = Pair(Commands.Create(), copy(owner = newOwner))
+        fstate.issuerKey = DUMMY_NOTARY_KEY.toString()
+        fstate.issuerRef = OpaqueBytes.of(1).bytes
+
+        data.invoke {
+            insert(fstate)
+            val result = select(VaultSchema.VaultFungibleState::class) where (VaultSchema.VaultFungibleState::txId eq fstate.txId) limit 10
+            Assert.assertSame(fstate, result().first())
         }
-        interface Commands : CommandData {
-            class Create : TypeOnlyCommandData(), Commands
-        }
+    }
 
-        override fun verify(tx: TransactionForContract) {
-            // Always accepts.
+    /**
+     *  Vault Schema: VaultLinearState
+     */
+    @Test
+    fun testInsertLinearState() {
+
+        val lstate = VaultLinearStateEntity()
+        lstate.txId = "12345"
+        lstate.index = 0
+
+        // TODO: 1:1 and 1:m uni-directional relationship mapping code generation not working in Requery
+//        lstate.particpants =
+//        lstate.ownerKey =
+//        lstate.dealParties =
+
+        lstate.ownerKey = DUMMY_KEY_1.toString()
+        lstate.externalId = "BOC:12345"
+        lstate.uuid = UUID.randomUUID()
+        lstate.dealRef = "USI:1234567890"
+
+        data.invoke {
+            insert(lstate)
+            val result = select(VaultSchema.VaultLinearState::class) where (VaultSchema.VaultLinearState::externalId eq lstate.externalId)
+            Assert.assertSame(lstate, result().first())
         }
     }
 
     @Test
     fun testAllUnconsumedStates() {
-
-        // setup date
+        // setup data
         data.invoke {
             transaction!!.inputs.forEach {
                 insert(createStateEntity(it))
             }
         }
-
-        val clazzName = "net.corda.core.contracts.DummyContract\$SingleOwnerState"
-        val clazz = Class.forName(clazzName) as Class<DummyContract.SingleOwnerState>
-        println("classname: ${clazz.toString()}")
-        val clazzType = clazz.typeName
-
-        var stateAndRefs = unconsumedStatesR<ContractState>()
-        stateAndRefs = unconsumedStates<ContractState>(ContractState::class.java)
+        val stateAndRefs = unconsumedStates<ContractState>()
         assertNotNull(stateAndRefs)
-        assertTrue { stateAndRefs.size > 0 }
+        assertTrue { stateAndRefs.size == 3 }
         stateAndRefs.forEach {
             println("ref  : ${it.ref}")
             println("state: ${it.state}")
@@ -400,16 +376,13 @@ class VaultSchemaTest {
 
     @Test
     fun tesUnconsumedDummyStates() {
-
-        // setup date
+        // setup data
         data.invoke {
             transaction!!.inputs.forEach {
                 insert(createStateEntity(it))
             }
         }
-
-        var stateAndRefs = unconsumedStatesR<DummyContract.State>()
-        stateAndRefs = unconsumedStates<DummyContract.State>(DummyContract.State::class.java)
+        val stateAndRefs = unconsumedStates<DummyContract.State>()
         assertNotNull(stateAndRefs)
         assertTrue { stateAndRefs.size == 2 }
         stateAndRefs.forEach {
@@ -420,16 +393,13 @@ class VaultSchemaTest {
 
     @Test
     fun tesUnconsumedDummySingleOwnerStates() {
-
-        // setup date
+        // setup data
         data.invoke {
             transaction!!.inputs.forEach {
                 insert(createStateEntity(it))
             }
         }
-
-        var stateAndRefs = unconsumedStatesR<DummyContract.SingleOwnerState>()
-        stateAndRefs = unconsumedStates<DummyContract.SingleOwnerState>(DummyContract.SingleOwnerState::class.java)
+        val stateAndRefs = unconsumedStates<DummyContract.SingleOwnerState>()
         assertNotNull(stateAndRefs)
         assertTrue { stateAndRefs.size == 1 }
         stateAndRefs.forEach {
@@ -438,13 +408,11 @@ class VaultSchemaTest {
         }
     }
 
-    inline fun <reified T: ContractState> unconsumedStatesR(): List<StateAndRef<T>> {
+    inline fun <reified T: ContractState> unconsumedStates(): List<StateAndRef<T>> {
         val stateAndRefs =
             data.invoke {
                 val result = select(VaultSchema.VaultStates::class)
-                        .where(VaultSchema.VaultStates::stateStatus eq VaultSchema.StateStatus.CONSENSUS_AGREED_UNCONSUMED)
-                //                        .and(VaultSchema.VaultStates::contractStateClassName eq T::class.toString())
-                //                            .and(Class.forName(VaultSchema.VaultStates::contractStateClassName).isInstance(T) eq true)
+                        .where(VaultSchema.VaultStates::stateStatus eq Vault.StateStatus.CONSENSUS_AGREED_UNCONSUMED)
                 result.get()
                         .map { it ->
                             val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
@@ -457,22 +425,61 @@ class VaultSchemaTest {
         return stateAndRefs
     }
 
-    fun <T: ContractState> unconsumedStates(clazz: Class<T>): List<StateAndRef<T>> {
-        val stateAndRefs =
-                data.invoke {
-                    val result = select(VaultSchema.VaultStates::class)
-                            .where(VaultSchema.VaultStates::stateStatus eq VaultSchema.StateStatus.CONSENSUS_AGREED_UNCONSUMED)
-                    result.get()
-                            .map { it ->
-                                val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
-                                val state = it.contractState.deserialize<TransactionState<T>>()
-                                StateAndRef(state, stateRef)
-                            }
-                            .filter {
-                                clazz.isAssignableFrom(it.state.data.javaClass)
-                            }.toList()
-                }
-        return stateAndRefs
+    /**
+     * Observables testing
+     */
+    @Test
+    @Throws(Exception::class)
+    fun testInsert() {
+        val stateEntity = createStateEntity(transaction!!.inputs[0])
+        val latch = CountDownLatch(1)
+        odata.insert(stateEntity).subscribe { stateEntity ->
+            Assert.assertNotNull(stateEntity.txId)
+            Assert.assertTrue(stateEntity.txId.length > 0)
+            val cached = data.select(VaultSchema.VaultStates::class)
+                    .where(VaultSchema.VaultStates::txId.eq(stateEntity.txId)).get().first()
+            Assert.assertSame(cached, stateEntity)
+            latch.countDown()
+        }
+        latch.await()
     }
 
+    @Test
+    @Throws(Exception::class)
+    fun testInsertCount() {
+        val stateEntity = createStateEntity(transaction!!.inputs[0])
+        Observable.just(stateEntity)
+                .concatMap { person -> odata.insert(person).toObservable() }
+        odata.insert(stateEntity).toBlocking().value()
+        Assert.assertNotNull(stateEntity.txId)
+        Assert.assertTrue(stateEntity.txId.length > 0)
+        val count = data.count(VaultSchema.VaultStates::class).get().value()
+        Assert.assertEquals(1, count.toLong())
+    }
+
+    @Test
+    @Throws(Exception::class)
+    fun testQueryEmpty() {
+        val latch = CountDownLatch(1)
+        odata.select(VaultSchema.VaultStates::class).get().toObservable()
+                .subscribe({ Assert.fail() }, { Assert.fail() }) { latch.countDown() }
+        if (!latch.await(1, TimeUnit.SECONDS)) {
+            Assert.fail()
+        }
+    }
+
+    @Test
+    @Throws(Exception::class)
+    fun testQueryObservable() {
+        transaction!!.inputs.forEach {
+            val stateEntity = createStateEntity(it)
+            odata.insert(stateEntity)
+        }
+
+        val states = ArrayList<VaultStatesEntity>()
+        odata.select(VaultSchema.VaultStates::class).get()
+                .toObservable()
+                .subscribe { it -> states.add(it as VaultStatesEntity) }
+        Assert.assertEquals(3, states.size)
+    }
 }

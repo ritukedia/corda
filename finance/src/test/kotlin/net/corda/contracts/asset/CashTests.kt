@@ -5,6 +5,7 @@ import net.corda.core.contracts.*
 import net.corda.core.crypto.*
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultService
+import net.corda.core.node.services.unconsumedStates
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.WireTransaction
@@ -77,7 +78,7 @@ class CashTests {
             services.fillWithSomeTestCash(howMuch = 80.SWISS_FRANCS, atLeastThisManyStates = 1, atMostThisManyStates = 1,
                     issuedBy = MINI_CORP.ref(1), issuerKey = MINI_CORP_KEY, ownedBy = OUR_PUBKEY_1)
 
-            vaultService = services.vaultService.unconsumedStates(Cash.State::class.java)
+            vaultService = services.vaultService.unconsumedStates<Cash.State>()
         }
     }
 

@@ -2,7 +2,6 @@ apply plugin: 'kotlin'
 // Java Persistence API support: create no-arg constructor
 // see: http://stackoverflow.com/questions/32038177/kotlin-with-jpa-default-constructor-hell
 apply plugin: 'kotlin-jpa'
-//apply plugin: 'kotlin-kapt'
 apply plugin: CanonicalizerPlugin
 apply plugin: 'net.corda.plugins.publish-utils'
 apply plugin: 'net.corda.plugins.quasar-utils'
@@ -23,10 +22,6 @@ repositories {
 
 dependencies {
     compile project(':core')
-
-    // requery
-//    compile "io.requery:requery-kotlin:$requery_version"
-//    kapt "io.requery:requery-processor:$requery_version"
 
     testCompile project(':test-utils')
     testCompile "junit:junit:$junit_version"

@@ -1,11 +1,6 @@
 package net.corda.node.services.persistence
 
-import com.r3corda.node.services.query.RequeryQueryServiceImpl
-import com.r3corda.node.services.schema.RequeryPersistenceService
-import io.requery.kotlin.eq
-import io.requery.kotlin.invoke
 import net.corda.contracts.CommercialPaper
-import net.corda.contracts.ICommercialPaperState
 import net.corda.contracts.asset.Cash
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
@@ -18,20 +13,19 @@ import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.QueryableState
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.TEST_TX_TIME
+import net.corda.node.services.query.RequeryQueryServiceImpl
 import net.corda.node.services.schema.NodeSchemaService
-import net.corda.node.services.vault.schemas.VaultSchema
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.databaseTransaction
 import net.corda.schemas.CashSchemaV1
-import net.corda.schemas.CommercialPaperSchema
 import net.corda.schemas.CommercialPaperSchemaV1
+import net.corda.schemas.Models
 import net.corda.schemas.TradeSchemaV1
 import net.corda.testing.*
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
 import org.jetbrains.exposed.sql.Database
 import org.junit.After
-import org.junit.Assert
 import org.junit.Before
 import org.junit.Test
 import java.io.Closeable
@@ -49,8 +43,8 @@ class RequeryPersistenceServiceTest {
     lateinit var database: Database
 
     lateinit var services: MockServices
-    val persistenceService = RequeryPersistenceService(NodeSchemaService())
-    val queryService = RequeryQueryServiceImpl(NodeSchemaService())
+    val persistenceService = RequeryPersistenceService(NodeSchemaService(), Models.SCHEMAS)
+    val queryService = RequeryQueryServiceImpl(NodeSchemaService(), Models.SCHEMAS)
 
     @Before
     fun setUp() {
