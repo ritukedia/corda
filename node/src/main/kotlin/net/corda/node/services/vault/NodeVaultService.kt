@@ -5,6 +5,7 @@ import net.corda.contracts.asset.Cash
 import net.corda.core.ThreadBox
 import net.corda.core.bufferUntilSubscribed
 import net.corda.core.contracts.*
+import net.corda.core.contracts.Requirements.by
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.SecureHash
@@ -345,13 +346,14 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
     }
 
     // TODO : Persists this in DB.
-    private val authorisedUpgrade = mutableMapOf<StateAndRef<ContractState>, UpgradedContract<ContractState, ContractState>>()
+    private val authorisedUpgrade = mutableMapOf<StateAndRef<*>, UpgradedContract<*, *>>()
 
-    override fun getAuthorisedUpgrade(state: StateAndRef<ContractState>) = authorisedUpgrade[state]
+    override fun getAuthorisedContractUpgrade(stateAndRef: StateAndRef<*>) = authorisedUpgrade[stateAndRef]
 
     @Suppress("UNCHECKED_CAST")
-    override fun <S : ContractState, T : ContractState> authoriseUpgrade(state: StateAndRef<S>, upgrade: UpgradedContract<S, T>) {
-        authorisedUpgrade.put(state, upgrade as UpgradedContract<ContractState, ContractState>)
+    override fun authoriseContractUpgrade(stateAndRef: StateAndRef<*>, upgrade: UpgradedContract<*, *>) {
+        "The upgraded contract is an upgrade of the contract state's contract." by (upgrade.legacyContract.javaClass == stateAndRef.state.data.contract.javaClass)
+        authorisedUpgrade.put(stateAndRef, upgrade)
     }
 
     private fun isRelevant(state: ContractState, ourKeys: Set<PublicKey>) = when (state) {

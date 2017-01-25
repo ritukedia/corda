@@ -49,7 +49,7 @@ object ContractUpgradeFlow {
             return maybeProposal.unwrap { proposal ->
                 val stx = serviceHub.storageService.validatedTransactions.getTransaction(proposal.stateRef.txhash) ?: throw IllegalStateException("We don't have a copy of the referenced state")
                 val state = stx.tx.outRef<ContractState>(proposal.stateRef.index)
-                val authorisedUpgrade = serviceHub.vaultService.getAuthorisedUpgrade(state) ?: throw IllegalStateException("Contract state upgrade is unauthorised. State hash : ${state.ref}")
+                val authorisedUpgrade = serviceHub.vaultService.getAuthorisedContractUpgrade(state) ?: throw IllegalStateException("Contract state upgrade is unauthorised. State hash : ${state.ref}")
                 val actualTx = proposal.stx.tx
                 val expectedTx = assembleBareTx(state, proposal.modification).toWireTransaction()
                 requireThat {

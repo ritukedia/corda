@@ -68,7 +68,7 @@ class ContractUpgradeFlowTest {
         assertFails { rejectedFuture.get() }
 
         // Party B authorise the contract state upgrade.
-        b.services.vaultService.authoriseUpgrade(btx!!.tx.outRef(0), DUMMY_V2_PROGRAM_ID)
+        b.services.vaultService.authoriseContractUpgrade(btx!!.tx.outRef<ContractState>(0), DUMMY_V2_PROGRAM_ID)
 
         // Party A initiate contract upgrade flow, expected to success this time.
         val resultFuture = a.services.startFlow(ContractUpgradeFlow.Instigator(atx.tx.outRef(0), DUMMY_V2_PROGRAM_ID)).resultFuture

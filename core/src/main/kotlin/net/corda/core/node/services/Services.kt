@@ -167,9 +167,10 @@ interface VaultService {
 
     /** Get contracts we would be willing to upgrade the suggested contract to. */
     // TODO: We need a better place to put business logic functions
-    fun getAuthorisedUpgrade(state: StateAndRef<ContractState>): UpgradedContract<ContractState, ContractState>?
+    fun getAuthorisedContractUpgrade(stateAndRef: StateAndRef<*>): UpgradedContract<*, *>?
+
     /** Attempt to upgrade the given contract to a newer version. */
-    fun <S : ContractState, T : ContractState> authoriseUpgrade(state: StateAndRef<S>, upgrade: UpgradedContract<S, T>)
+    fun authoriseContractUpgrade(stateAndRef: StateAndRef<*>, upgrade: UpgradedContract<*, *>)
 
     /**
      *  Add a note to an existing [LedgerTransaction] given by its unique [SecureHash] id
