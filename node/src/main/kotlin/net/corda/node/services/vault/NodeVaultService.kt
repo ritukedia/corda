@@ -15,9 +15,7 @@ import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultService
 import net.corda.core.node.services.unconsumedStates
-import net.corda.core.serialization.SingletonSerializeAsToken
-import net.corda.core.serialization.deserialize
-import net.corda.core.serialization.serialize
+import net.corda.core.serialization.*
 import net.corda.core.tee
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.transactions.WireTransaction
@@ -49,7 +47,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         val log = loggerFor<NodeVaultService>()
     }
 
-    val configuration = RequeryConfiguration
+    val configuration = RequeryConfiguration()
     val session = configuration.sessionForModel(Models.VAULT)
 
     private val mutex = ThreadBox(content = object {
@@ -77,7 +75,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
                         state.index = it.key.index
                         state.stateStatus = Vault.StateStatus.CONSENSUS_AGREED_UNCONSUMED
                         state.contractStateClassName = it.value.state.data.javaClass.toString()
-                        state.contractState = it.value.state.serialize().bytes
+                        state.contractState = it.value.state.serialize(createKryo()).bytes
                         state.notaryName = it.value.state.notary.name
                         state.notarised = Instant.now()
                         insert(state)
@@ -160,7 +158,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
                     result.get()
                             .map { it ->
                                 val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
-                                val state = it.contractState.deserialize<TransactionState<T>>()
+                                val state = it.contractState.deserialize<TransactionState<T>>(createKryo())
                                 StateAndRef(state, stateRef)
                             }
                             .filter {
@@ -355,6 +353,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         // a new collection and instead contains() just checks the contains() of both parameters, and so we don't end up
         // iterating over all (a potentially very large) unconsumedStates at any point.
         mutex.locked {
+            @Suppress("UNCHECKED_CAST")
             val unconsumedStates = unconsumedStates<ContractState>().toSet() as Set<ContractState>
             consumedRefs.retainAll(Sets.union(netDelta.produced, unconsumedStates))
         }

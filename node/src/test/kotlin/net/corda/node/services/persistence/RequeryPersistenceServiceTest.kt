@@ -15,11 +15,11 @@ import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.TEST_TX_TIME
 import net.corda.node.services.query.RequeryQueryServiceImpl
 import net.corda.node.services.schema.NodeSchemaService
+import net.corda.node.services.vault.schemas.Models
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.databaseTransaction
 import net.corda.schemas.CashSchemaV1
 import net.corda.schemas.CommercialPaperSchemaV1
-import net.corda.schemas.Models
 import net.corda.schemas.TradeSchemaV1
 import net.corda.testing.*
 import net.corda.testing.node.MockServices
@@ -43,8 +43,8 @@ class RequeryPersistenceServiceTest {
     lateinit var database: Database
 
     lateinit var services: MockServices
-    val persistenceService = RequeryPersistenceService(NodeSchemaService(), Models.SCHEMAS)
-    val queryService = RequeryQueryServiceImpl(NodeSchemaService(), Models.SCHEMAS)
+    val persistenceService = RequeryPersistenceService(NodeSchemaService(), Models.VAULT)
+    val queryService = RequeryQueryServiceImpl(NodeSchemaService(), Models.VAULT)
 
     @Before
     fun setUp() {

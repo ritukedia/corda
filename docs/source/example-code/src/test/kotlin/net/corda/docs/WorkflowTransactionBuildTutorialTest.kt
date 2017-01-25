@@ -1,13 +1,13 @@
 package net.corda.docs
 
 import com.google.common.util.concurrent.SettableFuture
-import net.corda.core.contracts.LinearState
-import net.corda.core.contracts.StateAndRef
-import net.corda.core.contracts.StateRef
+import net.corda.core.contracts.*
 import net.corda.core.getOrThrow
 import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.ServiceInfo
 import net.corda.core.node.services.linearHeadsOfType
+import net.corda.core.serialization.deserialize
+import net.corda.core.serialization.serialize
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import net.corda.node.services.network.NetworkMapService
@@ -51,6 +51,17 @@ class WorkflowTransactionBuildTutorialTest {
     fun cleanUp() {
         println("Close DB")
         net.stopNodes()
+    }
+
+    @Test
+    fun `serialization`() {
+        val tradeProposal = TradeApprovalContract.State(
+                "1234",
+                nodeA.info.legalIdentity,
+                nodeB.info.legalIdentity)
+        val s = tradeProposal.withNotary(notaryNode.info.notaryIdentity).serialize().bytes
+        println(s.size)
+        s.deserialize<TransactionState<*>>()
     }
 
     @Test

@@ -180,7 +180,7 @@ interface VaultService {
     /**
      * return [ContractState]'s of a given [Contract] type and list of [Vault.StateStatus]
      */
-    fun <T : ContractState> states(clazz: Class<T>, status: Set<Vault.StateStatus>): List<StateAndRef<T>>
+    fun <T : ContractState> states(clazz: Class<T>, statuses: Set<Vault.StateStatus>): List<StateAndRef<T>>
 }
 
 inline fun <reified T: ContractState> VaultService.unconsumedStates(): List<StateAndRef<T>> =

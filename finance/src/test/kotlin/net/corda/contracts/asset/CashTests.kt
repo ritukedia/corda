@@ -567,7 +567,7 @@ class CashTests {
             val wtx = makeSpend(100.DOLLARS, THEIR_PUBKEY_1)
 
             @Suppress("UNCHECKED_CAST")
-            val vaultState = vaultService.elementAt(0) as StateAndRef<Cash.State>
+            val vaultState = vaultService.elementAt(0)
             assertEquals(vaultState.ref, wtx.inputs[0])
             assertEquals(vaultState.state.data.copy(owner = THEIR_PUBKEY_1), wtx.outputs[0].data)
             assertEquals(OUR_PUBKEY_1, wtx.commands.single { it.value is Cash.Commands.Move }.signers[0])
@@ -594,7 +594,7 @@ class CashTests {
             val wtx = makeSpend(10.DOLLARS, THEIR_PUBKEY_1)
 
             @Suppress("UNCHECKED_CAST")
-            val vaultState = vaultService.elementAt(0) as StateAndRef<Cash.State>
+            val vaultState = vaultService.elementAt(0)
             assertEquals(vaultState.ref, wtx.inputs[0])
             assertEquals(vaultState.state.data.copy(owner = THEIR_PUBKEY_1, amount = 10.DOLLARS `issued by` defaultIssuer), wtx.outputs[0].data)
             assertEquals(vaultState.state.data.copy(amount = 90.DOLLARS `issued by` defaultIssuer), wtx.outputs[1].data)
@@ -609,7 +609,7 @@ class CashTests {
             val wtx = makeSpend(500.DOLLARS, THEIR_PUBKEY_1)
 
             @Suppress("UNCHECKED_CAST")
-            val vaultState0 = vaultService.elementAt(0) as StateAndRef<Cash.State>
+            val vaultState0 = vaultService.elementAt(0)
             val vaultState1 = vaultService.elementAt(1)
             assertEquals(vaultState0.ref, wtx.inputs[0])
             assertEquals(vaultState1.ref, wtx.inputs[1])
@@ -626,10 +626,10 @@ class CashTests {
             assertEquals(3, wtx.inputs.size)
 
             @Suppress("UNCHECKED_CAST")
-            val vaultState0 = vaultService.elementAt(0) as StateAndRef<Cash.State>
+            val vaultState0 = vaultService.elementAt(0)
             val vaultState1 = vaultService.elementAt(1)
             @Suppress("UNCHECKED_CAST")
-            val vaultState2 = vaultService.elementAt(2) as StateAndRef<Cash.State>
+            val vaultState2 = vaultService.elementAt(2)
             assertEquals(vaultState0.ref, wtx.inputs[0])
             assertEquals(vaultState1.ref, wtx.inputs[1])
             assertEquals(vaultState2.ref, wtx.inputs[2])

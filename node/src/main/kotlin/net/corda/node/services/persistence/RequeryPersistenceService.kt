@@ -17,7 +17,7 @@ import net.corda.node.services.vault.schemas.Models
 class RequeryPersistenceService(override val schemaService: SchemaService,
                                 val model: EntityModel) : AbstractPersistenceServiceImpl(schemaService) {
 
-    private val configuration = RequeryConfiguration
+    private val configuration = RequeryConfiguration()
 
     companion object {
         val logger = loggerFor<RequeryPersistenceService>()

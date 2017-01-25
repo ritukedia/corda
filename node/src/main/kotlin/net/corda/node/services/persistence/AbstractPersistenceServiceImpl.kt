@@ -15,8 +15,8 @@ abstract class AbstractPersistenceServiceImpl(open val schemaService: SchemaServ
         val logger = loggerFor<AbstractPersistenceServiceImpl>()
     }
 
-    override fun persist(produced: Set<StateAndRef<ContractState>>) {
-        produced.forEach { persistState(it) }
+    override fun persist(stateAndRefs: Set<StateAndRef<ContractState>>) {
+        stateAndRefs.forEach { persistState(it) }
     }
 
     override fun persistState(stateAndRef: StateAndRef<ContractState>) {

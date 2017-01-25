@@ -21,7 +21,7 @@ class RequeryQueryServiceImpl(val schemaService: SchemaService,
         val logger = loggerFor<RequeryQueryServiceImpl>()
     }
 
-    val configuration = RequeryConfiguration
+    val configuration = RequeryConfiguration()
 
     override fun simpleQueryForSchema(sqlString: String, schema: MappedSchema, vararg args: Any?): Iterable<Any?> {
         throw UnsupportedOperationException("not implemented") //To change body of created functions use File | Settings | File Templates.
@@ -44,7 +44,10 @@ class RequeryQueryServiceImpl(val schemaService: SchemaService,
         return results ?: emptyList()
     }
 
-    private fun convertToQueryableAttributes(args: Array<out Any?>): QueryableAttribute<Any, *>? { return null}
+    private fun convertToQueryableAttributes(args: Array<out Any?>): QueryableAttribute<Any, *>? {
+        println(args)
+        return null
+    }
 
     override fun namedQueryForSchema(queryName: String, schema: MappedSchema, vararg args: Any?): Iterable<Any?> {
         throw UnsupportedOperationException("not implemented") //To change body of created functions use File | Settings | File Templates.
@@ -57,7 +60,7 @@ class RequeryQueryServiceImpl(val schemaService: SchemaService,
         val results =
             configuration.sessionForModel(model).invoke {
                 val result = select(entityClass)
-                result.get().toList() as List<T> ?: emptyList()
+                result.get().toList()
             }
         return results
     }

@@ -14,9 +14,11 @@ import net.corda.core.utilities.loggerFor
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
-object RequeryConfiguration {
+class RequeryConfiguration() {
 
-    val logger = loggerFor<RequeryConfiguration>()
+    companion object {
+        val logger = loggerFor<RequeryConfiguration>()
+    }
 
     // TODO:
     // 1. schemaService schemaOptions needs to be applied: eg. default schema, table prefix
