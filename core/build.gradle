@@ -69,7 +69,7 @@ dependencies {
     compile "com.google.guava:guava:$guava_version"
 
     // RxJava: observable streams of events.
-    compile "io.reactivex:rxjava:1.2.4"
+    compile "io.reactivex:rxjava:$rxjava_version"
 
     // Kryo: object graph serialization.
     compile "com.esotericsoftware:kryo:4.0.0"
