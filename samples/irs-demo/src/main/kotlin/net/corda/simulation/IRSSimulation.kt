@@ -8,6 +8,7 @@ import com.google.common.util.concurrent.SettableFuture
 import net.corda.core.RunOnCallerThread
 import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.UniqueIdentifier
+import net.corda.core.crypto.toBase58String
 import net.corda.core.flatMap
 import net.corda.core.flows.FlowStateMachine
 import net.corda.core.map
@@ -43,6 +44,8 @@ class IRSSimulation(networkSendManuallyPumped: Boolean, runAsync: Boolean, laten
     override fun startMainSimulation(): ListenableFuture<Unit> {
         val future = SettableFuture.create<Unit>()
 
+        println("Node 0: ${banks[0].info.legalIdentity.owningKey.toBase58String()}")
+        println("Node 1: ${banks[1].info.legalIdentity.owningKey.toBase58String()}")
         startIRSDealBetween(0, 1).success {
             // Next iteration is a pause.
             executeOnNextIteration.add {}
