@@ -11,9 +11,9 @@ import net.corda.vega.contracts.OGTrade
 import net.corda.vega.contracts.SwapData
 
 object IRSTradeFlow {
-    data class OfferMessage(val notary: Party, val dealBeingOffered: IRSState)
+    data class OfferMessage(val notary: Party.Full, val dealBeingOffered: IRSState)
 
-    class Requester(val swap: SwapData, val otherParty: Party) : FlowLogic<SignedTransaction>() {
+    class Requester(val swap: SwapData, val otherParty: Party.Full) : FlowLogic<SignedTransaction>() {
 
         @Suspendable
         override fun call(): SignedTransaction {
@@ -21,7 +21,7 @@ object IRSTradeFlow {
             val notary = serviceHub.networkMapCache.notaryNodes.first().notaryIdentity
             val myIdentity = serviceHub.myInfo.legalIdentity
             val (buyer, seller) =
-                    if (swap.buyer.second == myIdentity.name) {
+                    if (swap.buyer.second == myIdentity.owningKey) {
                         Pair(myIdentity, otherParty)
                     } else {
                         Pair(otherParty, myIdentity)

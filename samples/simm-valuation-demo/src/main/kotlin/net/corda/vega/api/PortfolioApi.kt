@@ -40,7 +40,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
      * DSL to get a party and then executing the passed function with the party as a parameter.
      * Used as such: withParty(name) { doSomethingWith(it) }
      */
-    private fun withParty(partyName: String, func: (Party) -> Response): Response {
+    private fun withParty(partyName: String, func: (Party.Full) -> Response): Response {
         val otherParty = rpc.partyFromKey(CompositeKey.parseFromBase58(partyName))
         return if (otherParty != null) {
             func(otherParty)
@@ -220,7 +220,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
         return withParty(partyName) { party ->
             withPortfolio(party.toState()) { state ->
                 if (state.valuation != null) {
-                    val isValuer = state.valuer.name == ownParty.name
+                    val isValuer = state.valuer == ownParty
                     val rawMtm = state.valuation.presentValues.map {
                         it.value.amounts.first().amount
                     }.reduce { a, b -> a + b }
@@ -247,11 +247,11 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     @Produces(MediaType.APPLICATION_JSON)
     fun getWhoAmI(): AvailableParties {
         val counterParties = rpc.networkMapUpdates().first.filter {
-            it.legalIdentity.name != "NetworkMapService" && it.legalIdentity.name != "Notary" && it.legalIdentity.name != ownParty.name
+            it.legalIdentity.name != "NetworkMapService" && it.legalIdentity.name != "Notary" && it.legalIdentity != ownParty
         }
 
         return AvailableParties(
-                self = ApiParty(ownParty.owningKey.toBase58String(), ownParty.name),
+                self = ApiParty(ownParty.owningKey.toBase58String(), ownParty.owningKey.toBase58String()),
                 counterparties = counterParties.map { ApiParty(it.legalIdentity.owningKey.toBase58String(), it.legalIdentity.name) })
     }
 
@@ -266,16 +266,16 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     @Produces(MediaType.APPLICATION_JSON)
     fun startPortfolioCalculations(params: ValuationCreationParams = ValuationCreationParams(LocalDate.of(2016, 6, 6)), @PathParam("party") partyName: String): Response {
         return withParty(partyName) { otherParty ->
-            val otherParty.Anonymised = otherParty.toState()
-            val existingSwap = getPortfolioWith(otherParty.Anonymised)
+            val otherParty = otherParty.toState()
+            val existingSwap = getPortfolioWith(otherParty)
             if (existingSwap == null) {
                 rpc.startFlow(SimmFlow::Requester, otherParty, params.valuationDate).returnValue.toBlocking().first()
             } else {
-                val handle = rpc.startFlow(SimmRevaluation::Initiator, getPortfolioStateAndRefWith(otherParty.Anonymised).ref, params.valuationDate)
+                val handle = rpc.startFlow(SimmRevaluation::Initiator, getPortfolioStateAndRefWith(otherParty).ref, params.valuationDate)
                 handle.returnValue.toBlocking().first()
             }
 
-            withPortfolio(otherParty.Anonymised) { portfolioState ->
+            withPortfolio(otherParty) { portfolioState ->
                 val portfolio = portfolioState.portfolio.toStateAndRef<IRSState>(rpc).toPortfolio()
                 Response.ok().entity(portfolioUtils.createValuations(portfolioState, portfolio)).build()
             }

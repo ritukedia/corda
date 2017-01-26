@@ -121,7 +121,7 @@ val crossCashTest = LoadTest<CrossCashCommand, CrossCashState>(
                 Generator.sequence(
                         nodes.map { node ->
                             val quantities = state.nodeVaults[node.info.legalIdentity.toState()] ?: mapOf()
-                            val possibleRecipients = nodeMap.keys.toList()
+                            val possibleRecipients = nodeMap.keys.toList().map { it.toState() }
                             val moves = quantities.map {
                                 it.value.toDouble() / 1000 to generateMove(it.value, USD, it.key, possibleRecipients)
                             }

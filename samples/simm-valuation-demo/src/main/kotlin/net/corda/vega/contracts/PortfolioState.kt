@@ -44,11 +44,11 @@ data class PortfolioState(val portfolio: List<StateRef>,
         return parties.flatMap { it.owningKey.keys }.intersect(ourKeys).isNotEmpty()
     }
 
-    override fun generateAgreement(notary: Party): TransactionBuilder {
+    override fun generateAgreement(notary: Party.Full): TransactionBuilder {
         return TransactionType.General.Builder(notary).withItems(copy(), Command(PortfolioSwap.Commands.Agree(), parties.map { it.owningKey }))
     }
 
-    override fun generateRevision(notary: Party, oldState: StateAndRef<*>, updatedValue: Update): TransactionBuilder {
+    override fun generateRevision(notary: Party.Full, oldState: StateAndRef<*>, updatedValue: Update): TransactionBuilder {
         require(oldState.state.data == this)
         val portfolio = updatedValue.portfolio ?: portfolio
         val valuation = updatedValue.valuation ?: valuation

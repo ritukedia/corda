@@ -36,7 +36,7 @@ object SimmFlow {
      * Represents a new portfolio offer unless the stateRef field is non-null, at which point it represents a
      * portfolio update offer.
      */
-    data class OfferMessage(val notary: Party,
+    data class OfferMessage(val notary: Party.Full,
                             val dealBeingOffered: PortfolioState,
                             val stateRef: StateRef?,
                             val valuationDate: LocalDate)
@@ -51,12 +51,12 @@ object SimmFlow {
     : FlowLogic<RevisionedState<PortfolioState.Update>>() {
         constructor(otherParty: Party, valuationDate: LocalDate) : this(otherParty, valuationDate, null)
 
-        lateinit var myIdentity: Party
-        lateinit var notary: Party
+        lateinit var myIdentity: Party.Full
+        lateinit var notary: Party.Full
 
         @Suspendable
         override fun call(): RevisionedState<PortfolioState.Update> {
-            logger.debug("Calling from: ${serviceHub.myInfo.legalIdentity.name}. Sending to: ${otherParty.name}")
+            logger.debug("Calling from: ${serviceHub.myInfo.legalIdentity}. Sending to: ${otherParty}")
             require(serviceHub.networkMapCache.notaryNodes.isNotEmpty()) { "No notary nodes registered" }
             notary = serviceHub.networkMapCache.notaryNodes.first().notaryIdentity
             myIdentity = serviceHub.myInfo.legalIdentity
@@ -99,7 +99,7 @@ object SimmFlow {
             logger.info("Agreeing valuations")
             val state = stateRef.state.data
             val portfolio = state.portfolio.toStateAndRef<IRSState>(serviceHub).toPortfolio()
-            val valuer = state.valuer.resolveParty(serviceHub.identityService)
+            val valuer = serviceHub.identityService.deanonymiseParty(state.valuer)
             require(valuer != null) { "Valuer party must be known to this node" }
             val valuation = agreeValuation(portfolio, valuationDate, valuer!!)
             val update = PortfolioState.Update(valuation = valuation)
@@ -185,7 +185,7 @@ object SimmFlow {
     /**
      * Receives and validates a portfolio and comes to consensus over the portfolio initial margin using SIMM.
      */
-    class Receiver(val replyToParty: Party) : FlowLogic<Unit>() {
+    class Receiver(val replyToParty: Party.Full) : FlowLogic<Unit>() {
         lateinit var ownParty: Party
         lateinit var offer: OfferMessage
 
@@ -213,7 +213,7 @@ object SimmFlow {
 
         @Suspendable
         private fun agreeValuation(portfolio: Portfolio, asOf: LocalDate, valuer: Party.Anonymised): PortfolioValuation {
-            val valuerParty = valuer.resolveParty(serviceHub.identityService)
+            val valuerParty = serviceHub.identityService.deanonymiseParty(valuer)
             require(valuerParty != null)
             return agreeValuation(portfolio, asOf, valuerParty!!)
         }

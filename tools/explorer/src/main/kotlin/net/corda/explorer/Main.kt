@@ -158,17 +158,17 @@ fun main(args: Array<String>) {
             val issuerRPCUSD = issuerClientUSD.proxy()
 
             val eventGenerator = EventGenerator(
-                    parties = listOf(aliceNode.nodeInfo.legalIdentity, bobNode.nodeInfo.legalIdentity),
+                    parties = listOf(aliceNode.nodeInfo.legalIdentity.toState(), bobNode.nodeInfo.legalIdentity.toState()),
                     notary = notaryNode.nodeInfo.notaryIdentity,
-                    issuers = listOf(issuerNodeGBP.nodeInfo.legalIdentity,issuerNodeUSD.nodeInfo.legalIdentity)
+                    issuers = listOf(issuerNodeGBP.nodeInfo.legalIdentity.toState(), issuerNodeUSD.nodeInfo.legalIdentity.toState())
             )
             val issuerGBPEventGenerator = EventGenerator(
-                    parties = listOf(issuerNodeGBP.nodeInfo.legalIdentity, aliceNode.nodeInfo.legalIdentity, bobNode.nodeInfo.legalIdentity),
+                    parties = listOf(issuerNodeGBP.nodeInfo.legalIdentity.toState(), aliceNode.nodeInfo.legalIdentity.toState(), bobNode.nodeInfo.legalIdentity.toState()),
                     notary = notaryNode.nodeInfo.notaryIdentity,
                     currencies = listOf(GBP)
             )
             val issuerUSDEventGenerator = EventGenerator(
-                    parties = listOf(issuerNodeUSD.nodeInfo.legalIdentity, aliceNode.nodeInfo.legalIdentity, bobNode.nodeInfo.legalIdentity),
+                    parties = listOf(issuerNodeUSD.nodeInfo.legalIdentity.toState(), aliceNode.nodeInfo.legalIdentity.toState(), bobNode.nodeInfo.legalIdentity.toState()),
                     notary = notaryNode.nodeInfo.notaryIdentity,
                     currencies = listOf(USD)
             )
@@ -195,7 +195,7 @@ fun main(args: Array<String>) {
                 issuerGBPEventGenerator.bankOfCordaIssueGenerator.map { command ->
                     issuerRPCGBP.startFlow(::IssuanceRequester,
                             command.amount,
-                            command.recipient.resolveParty(issuerRPCGBP)!!,
+                            issuerRPCGBP.deanonymiseParty(command.recipient)!!,
                             command.issueRef,
                             issuerNodeGBP.nodeInfo.legalIdentity)
                     Unit
@@ -203,7 +203,7 @@ fun main(args: Array<String>) {
                 issuerUSDEventGenerator.bankOfCordaIssueGenerator.map { command ->
                     issuerRPCUSD.startFlow(::IssuanceRequester,
                             command.amount,
-                            command.recipient.resolveParty(issuerRPCUSD)!!,
+                            issuerRPCUSD.deanonymiseParty(command.recipient)!!,
                             command.issueRef,
                             issuerNodeUSD.nodeInfo.legalIdentity)
                     Unit

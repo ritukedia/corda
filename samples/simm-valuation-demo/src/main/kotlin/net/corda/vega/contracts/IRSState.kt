@@ -19,7 +19,7 @@ data class IRSState(val swap: SwapData,
                     val seller: Party.Anonymised,
                     override val contract: OGTrade,
                     override val linearId: UniqueIdentifier = UniqueIdentifier(swap.id.first + swap.id.second)) : DealState {
-    constructor(swap: SwapData, buyer: Party, seller: Party, contract: OGTrade)
+    constructor(swap: SwapData, buyer: Party.Full, seller: Party.Full, contract: OGTrade)
         : this(swap, buyer.toState(), seller.toState(), contract)
     override val ref: String = linearId.externalId!! // Same as the constructor for UniqueIdentified
     override val parties: List<Party.Anonymised> get() = listOf(buyer, seller)
@@ -28,7 +28,7 @@ data class IRSState(val swap: SwapData,
         return parties.flatMap { it.owningKey.keys }.intersect(ourKeys).isNotEmpty()
     }
 
-    override fun generateAgreement(notary: Party): TransactionBuilder {
+    override fun generateAgreement(notary: Party.Full): TransactionBuilder {
         val state = IRSState(swap, buyer, seller, OGTrade())
         return TransactionType.General.Builder(notary).withItems(state, Command(OGTrade.Commands.Agree(), parties.map { it.owningKey }))
     }

@@ -122,7 +122,7 @@ class PortfolioApiUtils(private val ownParty: Party) {
             val ref: String)
 
     fun createTradeView(state: IRSState): TradeView {
-        val trade = if (state.buyer.name == ownParty.name) state.swap.toFloatingLeg() else state.swap.toFloatingLeg()
+        val trade = if (state.buyer == ownParty) state.swap.toFloatingLeg() else state.swap.toFloatingLeg()
         val fixedLeg = trade.product.legs.first { it.type == SwapLegType.FIXED } as RateCalculationSwapLeg
         val floatingLeg = trade.product.legs.first { it.type != SwapLegType.FIXED } as RateCalculationSwapLeg
         val fixedRate = fixedLeg.calculation as FixedRateCalculation

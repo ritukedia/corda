@@ -46,7 +46,7 @@ class NewTransaction : Fragment() {
     private val partyBLabel by fxid<Label>()
     private val issuerLabel by fxid<Label>()
     private val issuerTextField by fxid<TextField>()
-    private val issuerChoiceBox by fxid<ChoiceBox<Party>>()
+    private val issuerChoiceBox by fxid<ChoiceBox<Party.Full>>()
     private val issueRefLabel by fxid<Label>()
     private val issueRefTextField by fxid<TextField>()
     private val currencyLabel by fxid<Label>()
@@ -89,7 +89,7 @@ class NewTransaction : Fragment() {
             runAsync {
                 if (it is CashCommand.IssueCash) {
                     myIdentity.value?.let { myIdentity ->
-                        val resolvedRecipient = it.recipient.resolveParty(rpcProxy.value!!)!!
+                        val resolvedRecipient = rpcProxy.value!!.deanonymiseParty(it.recipient)!!
                         rpcProxy.value!!.startFlow(::IssuanceRequester,
                                 it.amount,
                                 resolvedRecipient,
