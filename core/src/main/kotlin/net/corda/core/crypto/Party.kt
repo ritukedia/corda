@@ -31,7 +31,7 @@ class Party(val name: String, val owningKey: CompositeKey) {
         else
             false
     }
-    override fun toString() = owningKey.toBase58String()
+    override fun toString() = name
 
     fun ref(bytes: OpaqueBytes) = PartyAndReference(this, bytes)
     fun ref(vararg bytes: Byte) = ref(OpaqueBytes.of(*bytes))
