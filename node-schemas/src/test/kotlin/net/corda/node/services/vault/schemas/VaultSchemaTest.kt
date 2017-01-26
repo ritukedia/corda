@@ -32,6 +32,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 // Re-defined from test-utils module (which currently depends and forces re-compilation of finance, core, node modules)
@@ -175,6 +176,29 @@ class VaultSchemaTest {
                 val result = select(VaultSchema.VaultStates::class) //where (VaultSchema.VaultStates::txId eq state.txId) limit 10
                 assertEquals(Vault.StateStatus.CONSENSUS_AGREED_CONSUMED, result().first().stateStatus)
             }
+        }
+    }
+
+    @Test
+    fun testCashBalanceUpdate() {
+
+        val cashBalanceEntity = VaultCashBalancesEntity()
+        cashBalanceEntity.currency = "USD"
+        cashBalanceEntity.amount = 100
+
+        data.invoke {
+            val state = findByKey(VaultCashBalancesEntity::class, cashBalanceEntity.currency)
+            assertNull(state)
+            upsert(cashBalanceEntity)
+        }
+
+        data.invoke {
+            val state = findByKey(VaultCashBalancesEntity::class, cashBalanceEntity.currency)
+            state?.let {
+                state.amount -= 80
+                upsert(state)
+            }
+            assertEquals(20, state!!.amount)
         }
     }
 

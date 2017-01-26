@@ -110,7 +110,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
                     cashBalanceEntity.amount = producedAmount.quantity - consumedAmount.quantity
 
                     session.invoke {
-                        val state = findByKey(VaultCashBalancesEntity::class, currency)
+                        val state = findByKey(VaultCashBalancesEntity::class, currency.currencyCode)
                         state?.let {
                             state.amount += producedAmount.quantity - consumedAmount.quantity
                         }
@@ -347,27 +347,31 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
                 map { tx.outRef<ContractState>(it.data) }
 
         // Now calculate the states that are being spent by this transaction.
-        val consumedRefs = tx.inputs.toHashSet()
+        val consumedInputRefs = tx.inputs.toHashSet()
+        val consumedInputStates =
+            if (!consumedInputRefs.isEmpty()) {
+                consumedInputRefs.map {
+                    val state = services.loadState(it)
+                    StateAndRef(state, it)
+                }
+            }
+            else emptySet<StateAndRef<ContractState>>()
+
         // We use Guava union here as it's lazy for contains() which is how retainAll() is implemented.
         // i.e. retainAll() iterates over consumed, checking contains() on the parameter.  Sets.union() does not physically create
         // a new collection and instead contains() just checks the contains() of both parameters, and so we don't end up
         // iterating over all (a potentially very large) unconsumedStates at any point.
+        val consumedStates = HashSet<StateAndRef<ContractState>>(consumedInputStates)
         mutex.locked {
-            @Suppress("UNCHECKED_CAST")
-            val unconsumedStates = unconsumedStates<ContractState>().toSet() as Set<ContractState>
-            consumedRefs.retainAll(Sets.union(netDelta.produced, unconsumedStates))
+            val unconsumedStates = unconsumedStates<ContractState>().toSet<StateAndRef<ContractState>>()
+            consumedStates.retainAll(Sets.union(netDelta.produced, unconsumedStates))
         }
 
         // Is transaction irrelevant?
-        if (consumedRefs.isEmpty() && ourNewStates.isEmpty()) {
+        if (consumedStates.isEmpty() && ourNewStates.isEmpty()) {
             log.trace { "tx ${tx.id} was irrelevant to this vault, ignoring" }
             return Vault.NoUpdate
         }
-
-        val consumedStates = consumedRefs.map {
-            val state = services.loadState(it)
-            StateAndRef(state, it)
-        }.toSet()
 
         return Vault.Update(consumedStates, ourNewStates.toHashSet())
     }
