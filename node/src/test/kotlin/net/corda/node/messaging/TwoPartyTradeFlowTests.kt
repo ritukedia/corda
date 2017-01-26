@@ -4,7 +4,10 @@ import net.corda.contracts.CommercialPaper
 import net.corda.contracts.asset.*
 import net.corda.contracts.testing.fillWithSomeTestCash
 import net.corda.core.contracts.*
-import net.corda.core.crypto.*
+import net.corda.core.crypto.CompositeKey
+import net.corda.core.crypto.Party
+import net.corda.core.crypto.SecureHash
+import net.corda.core.crypto.composite
 import net.corda.core.days
 import net.corda.core.flows.FlowStateMachine
 import net.corda.core.flows.StateMachineRunId
@@ -39,8 +42,8 @@ import org.junit.Test
 import rx.Observable
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.math.BigInteger
 import java.security.KeyPair
-import java.security.KeyPairGeneratorSpi
 import java.util.*
 import java.util.concurrent.Future
 import java.util.jar.JarOutputStream
@@ -175,8 +178,8 @@ class TwoPartyTradeFlowTests {
             bobNode = net.createNode(networkMapAddr, bobAddr.id, object : MockNetwork.Factory {
                 override fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
                                     advertisedServices: Set<ServiceInfo>, id: Int, overrideServices: Map<ServiceInfo, KeyPair>?,
-                                    keyPairGenerator: KeyPairGeneratorSpi): MockNetwork.MockNode {
-                    return MockNetwork.MockNode(config, network, networkMapAddr, advertisedServices, bobAddr.id, overrideServices, keyPairGenerator)
+                                    entropyRoot: BigInteger): MockNetwork.MockNode {
+                    return MockNetwork.MockNode(config, network, networkMapAddr, advertisedServices, bobAddr.id, overrideServices, entropyRoot)
                 }
             }, true, BOB.name)
 
@@ -217,8 +220,8 @@ class TwoPartyTradeFlowTests {
                                 networkMapAddr: SingleMessageRecipient?,
                                 advertisedServices: Set<ServiceInfo>, id: Int,
                                 overrideServices: Map<ServiceInfo, KeyPair>?,
-                                keyPairGenerator: KeyPairGeneratorSpi): MockNetwork.MockNode {
-                return object : MockNetwork.MockNode(config, network, networkMapAddr, advertisedServices, id, overrideServices, keyPairGenerator) {
+                                entropyRoot: BigInteger): MockNetwork.MockNode {
+                return object : MockNetwork.MockNode(config, network, networkMapAddr, advertisedServices, id, overrideServices, entropyRoot) {
                     // That constructs the storage service object in a customised way ...
                     override fun constructStorageService(
                             attachments: NodeAttachmentService,

@@ -19,6 +19,7 @@ import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.math.BigInteger
 import java.security.KeyPair
 import java.security.KeyPairGeneratorSpi
 import java.util.jar.JarOutputStream
@@ -88,8 +89,8 @@ class AttachmentTests {
             override fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
                                 advertisedServices: Set<ServiceInfo>, id: Int,
                                 overrideServices: Map<ServiceInfo, KeyPair>?,
-                                keyPairGenerator: KeyPairGeneratorSpi): MockNetwork.MockNode {
-                return object : MockNetwork.MockNode(config, network, networkMapAddr, advertisedServices, id, overrideServices, keyPairGenerator) {
+                                entropyRoot: BigInteger): MockNetwork.MockNode {
+                return object : MockNetwork.MockNode(config, network, networkMapAddr, advertisedServices, id, overrideServices, entropyRoot) {
                     override fun start(): MockNetwork.MockNode {
                         super.start()
                         (storage.attachments as NodeAttachmentService).checkAttachmentsOnLoad = false
@@ -97,7 +98,7 @@ class AttachmentTests {
                     }
                 }
             }
-        }, true, null, null, KeyPairGenerator(), ServiceInfo(NetworkMapService.type), ServiceInfo(SimpleNotaryService.type))
+        }, true, null, null, ServiceInfo(NetworkMapService.type), ServiceInfo(SimpleNotaryService.type))
         val n1 = network.createNode(n0.info.address)
 
         // Insert an attachment into node zero's store directly.

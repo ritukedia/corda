@@ -14,6 +14,7 @@ import net.corda.testing.node.MockNetwork
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.math.BigInteger
 import java.security.KeyPair
 import java.security.KeyPairGeneratorSpi
 
@@ -58,8 +59,8 @@ class PersistentNetworkMapServiceTest : AbstractNetworkMapServiceTest() {
         override fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
                             advertisedServices: Set<ServiceInfo>, id: Int,
                             overrideServices: Map<ServiceInfo, KeyPair>?,
-                            keyPairGenerator: KeyPairGeneratorSpi): MockNetwork.MockNode {
-            return object : MockNetwork.MockNode(config, network, networkMapAddr, advertisedServices, id, overrideServices, keyPairGenerator) {
+                            entropyRoot: BigInteger): MockNetwork.MockNode {
+            return object : MockNetwork.MockNode(config, network, networkMapAddr, advertisedServices, id, overrideServices, entropyRoot) {
 
                 override fun makeNetworkMapService() {
                     inNodeNetworkMapService = SwizzleNetworkMapService(services)

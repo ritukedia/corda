@@ -4,9 +4,9 @@ import com.google.common.jimfs.Configuration.unix
 import com.google.common.jimfs.Jimfs
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import net.i2p.crypto.eddsa.KeyPairGenerator
 import net.corda.core.*
 import net.corda.core.crypto.Party
+import net.corda.core.crypto.entropyToKeyPair
 import net.corda.core.messaging.RPCOps
 import net.corda.core.messaging.SingleMessageRecipient
 import net.corda.core.node.CordaPluginRegistry
@@ -30,9 +30,9 @@ import net.corda.node.utilities.AffinityExecutor.ServiceAffinityExecutor
 import net.corda.testing.TestNodeConfiguration
 import org.apache.activemq.artemis.utils.ReusableLatch
 import org.slf4j.Logger
+import java.math.BigInteger
 import java.nio.file.FileSystem
 import java.security.KeyPair
-import java.security.KeyPairGeneratorSpi
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -81,14 +81,14 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
          */
         fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
                    advertisedServices: Set<ServiceInfo>, id: Int, overrideServices: Map<ServiceInfo, KeyPair>?,
-                   keyPairGenerator: KeyPairGeneratorSpi): MockNode
+                   entropyRoot: BigInteger): MockNode
     }
 
     object DefaultFactory : Factory {
         override fun create(config: NodeConfiguration, network: MockNetwork, networkMapAddr: SingleMessageRecipient?,
                             advertisedServices: Set<ServiceInfo>, id: Int, overrideServices: Map<ServiceInfo, KeyPair>?,
-                            keyPairGenerator: KeyPairGeneratorSpi): MockNode {
-            return MockNode(config, network, networkMapAddr, advertisedServices, id, overrideServices, keyPairGenerator)
+                            entropyRoot: BigInteger): MockNode {
+            return MockNode(config, network, networkMapAddr, advertisedServices, id, overrideServices, entropyRoot)
         }
     }
 
@@ -120,8 +120,8 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
     /**
      * @param overrideServices a set of service entries to use in place of the node's default service entries,
      * for example where a node's service is part of a cluster.
-     * @param keyPairGenerator the key generator to use for keys for this node, for example to ensure that keys are
-     * generated stably during tests, or to produce intentional collisions.
+     * @param entropyRoot the initial entropy value to use when generating keys. Defaults to an (insecure) random value,
+     * but can be overriden to cause nodes to have stable or colliding identity/service keys.
      */
     open class MockNode(config: NodeConfiguration,
                         val mockNet: MockNetwork,
@@ -129,7 +129,8 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
                         advertisedServices: Set<ServiceInfo>,
                         val id: Int,
                         val overrideServices: Map<ServiceInfo, KeyPair>?,
-                        val keyPairGenerator: KeyPairGeneratorSpi = KeyPairGenerator()) : AbstractNode(config, advertisedServices, TestClock(), mockNet.busyLatch) {
+                        val entropyRoot: BigInteger = BigInteger.valueOf(random63BitValue())) : AbstractNode(config, advertisedServices, TestClock(), mockNet.busyLatch) {
+        var entropy = entropyRoot
         override val log: Logger = loggerFor<MockNode>()
         override val serverThread: AffinityExecutor =
                 if (mockNet.threadPerNode)
@@ -179,7 +180,11 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
             }
         }
 
-        override fun generateKeyPair(): KeyPair = keyPairGenerator.generateKeyPair()
+        // This is not thread safe, but node construction is done on a single thread, so that should always be fine
+        override fun generateKeyPair(): KeyPair {
+            entropy = entropy.add(BigInteger.ONE)
+            return entropyToKeyPair(entropy)
+        }
 
         // It's OK to not have a network map service in the mock network.
         override fun noNetworkMapConfigured(): ListenableFuture<Unit> = Futures.immediateFuture(Unit)
@@ -224,10 +229,28 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
         override fun acceptableLiveFiberCountOnStop(): Int = acceptableLiveFiberCountOnStop
     }
 
-    /** Returns a node, optionally created by the passed factory method. */
+    /**
+     * Returns a node, optionally created by the passed factory method.
+     * @param overrideServices a set of service entries to use in place of the node's default service entries,
+     * for example where a node's service is part of a cluster.
+     * @param entropyRoot the initial entropy value to use when generating keys. Defaults to an (insecure) random value,
+     * but can be overriden to cause nodes to have stable or colliding identity/service keys.
+     */
     fun createNode(networkMapAddress: SingleMessageRecipient? = null, forcedID: Int = -1, nodeFactory: Factory = defaultFactory,
                    start: Boolean = true, legalName: String? = null, overrideServices: Map<ServiceInfo, KeyPair>? = null,
-                   keyGenerator: KeyPairGeneratorSpi = KeyPairGenerator(),
+                   vararg advertisedServices: ServiceInfo): MockNode
+        = createNode(networkMapAddress, forcedID, nodeFactory, start, legalName, overrideServices, BigInteger.valueOf(random63BitValue()), *advertisedServices)
+
+    /**
+     * Returns a node, optionally created by the passed factory method.
+     * @param overrideServices a set of service entries to use in place of the node's default service entries,
+     * for example where a node's service is part of a cluster.
+     * @param entropyRoot the initial entropy value to use when generating keys. Defaults to an (insecure) random value,
+     * but can be overriden to cause nodes to have stable or colliding identity/service keys.
+     */
+    fun createNode(networkMapAddress: SingleMessageRecipient? = null, forcedID: Int = -1, nodeFactory: Factory = defaultFactory,
+                   start: Boolean = true, legalName: String? = null, overrideServices: Map<ServiceInfo, KeyPair>? = null,
+                   entropyRoot: BigInteger = BigInteger.valueOf(random63BitValue()),
                    vararg advertisedServices: ServiceInfo): MockNode {
         val newNode = forcedID == -1
         val id = if (newNode) nextNodeId++ else forcedID
@@ -241,7 +264,7 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
                 myLegalName = legalName ?: "Mock Company $id",
                 networkMapService = null,
                 dataSourceProperties = makeTestDataSourceProperties("node_${id}_net_$networkId"))
-        val node = nodeFactory.create(config, this, networkMapAddress, advertisedServices.toSet(), id, overrideServices, keyGenerator)
+        val node = nodeFactory.create(config, this, networkMapAddress, advertisedServices.toSet(), id, overrideServices, entropyRoot)
         if (start) {
             node.setup().start()
             if (threadPerNode && networkMapAddress != null)
@@ -284,7 +307,7 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
         else
             null
         return Pair(
-                createNode(null, -1, nodeFactory, true, null, notaryOverride, KeyPairGenerator(), ServiceInfo(NetworkMapService.type), notaryServiceInfo),
+                createNode(null, -1, nodeFactory, true, null, notaryOverride, BigInteger.valueOf(random63BitValue()), ServiceInfo(NetworkMapService.type), notaryServiceInfo),
                 createNode(nodes[0].info.address, -1, nodeFactory, true, null)
         )
     }
@@ -320,7 +343,7 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
                          legalName: String? = null,
                          overrideServices: Map<ServiceInfo, KeyPair>? = null,
                          serviceName: String? = null): MockNode {
-        return createNode(networkMapAddr, -1, defaultFactory, true, legalName, overrideServices, KeyPairGenerator(),
+        return createNode(networkMapAddr, -1, defaultFactory, true, legalName, overrideServices, BigInteger.valueOf(random63BitValue()),
                 ServiceInfo(NetworkMapService.type), ServiceInfo(ValidatingNotaryService.type, serviceName))
     }
 
