@@ -51,13 +51,13 @@ data class TradeApprovalContract(override val legalContractReference: SecureHash
      * Truly minimal state that just records a tradeId string and the parties involved.
      */
     data class State(val tradeId: String,
-                     val source: Party,
-                     val counterparty: Party,
+                     val source: Party.Anonymised,
+                     val counterparty: Party.Anonymised,
                      val state: WorkflowState = WorkflowState.NEW,
                      override val linearId: UniqueIdentifier = UniqueIdentifier(tradeId),
                      override val contract: TradeApprovalContract = TradeApprovalContract()) : LinearState {
 
-        val parties: List<Party> get() = listOf(source, counterparty)
+        val parties: List<Party.Anonymised> get() = listOf(source, counterparty)
         override val participants: List<CompositeKey> get() = parties.map { it.owningKey }
 
         override fun isRelevant(ourKeys: Set<PublicKey>): Boolean {
@@ -110,13 +110,13 @@ data class TradeApprovalContract(override val legalContractReference: SecureHash
  * as their approval/rejection is to follow.
  */
 class SubmitTradeApprovalFlow(val tradeId: String,
-                              val counterparty: Party) : FlowLogic<StateAndRef<TradeApprovalContract.State>>() {
+                              val counterparty: Party.Anonymised) : FlowLogic<StateAndRef<TradeApprovalContract.State>>() {
     @Suspendable
     override fun call(): StateAndRef<TradeApprovalContract.State> {
         // Manufacture an initial state
         val tradeProposal = TradeApprovalContract.State(
                 tradeId,
-                serviceHub.myInfo.legalIdentity,
+                serviceHub.myInfo.legalIdentity.toState(),
                 counterparty)
         // identify a notary. This might also be done external to the flow
         val notary = serviceHub.networkMapCache.getAnyNotary()
@@ -164,7 +164,7 @@ class SubmitCompletionFlow(val ref: StateRef, val verdict: WorkflowState) : Flow
             "Input trade not modifiable ${latestRecord.state.data.state}"
         }
         // Check we are the correct Party to run the protocol. Note they will counter check this too.
-        require(latestRecord.state.data.counterparty == serviceHub.myInfo.legalIdentity) {
+        require(latestRecord.state.data.counterparty.owningKey == serviceHub.myInfo.legalIdentity.owningKey) {
             "The counterparty must give the verdict"
         }
 
@@ -242,7 +242,7 @@ class RecordCompletionFlow(val source: Party) : FlowLogic<Unit>() {
             // Check the context dependent parts of the transaction as the
             // Contract verify method must not use serviceHub queries.
             val state = wtx.outRef<TradeApprovalContract.State>(0)
-            require(state.state.data.source == serviceHub.myInfo.legalIdentity) {
+            require(state.state.data.source.owningKey == serviceHub.myInfo.legalIdentity.owningKey) {
                 "Proposal not one of our original proposals"
             }
             require(state.state.data.counterparty == source) {

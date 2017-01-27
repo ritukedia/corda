@@ -208,7 +208,7 @@ class ForeignExchangeFlow(val tradeId: String,
     // DOCEND 3
 }
 
-class ForeignExchangeRemoteFlow(val source: Party) : FlowLogic<Unit>() {
+class ForeignExchangeRemoteFlow(val source: Party.Full) : FlowLogic<Unit>() {
     @Suspendable
     override fun call() {
         // Initial receive from remote party
