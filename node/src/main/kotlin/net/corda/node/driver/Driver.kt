@@ -468,7 +468,7 @@ open class DriverDSL(
             else
                 ""
 
-            val additionalKeys = listOf("AMQ_DELIVERY_DELAY_MS")
+            val additionalKeys = listOf("amq.delivery.delay.ms")
 
             val systemArgs = mutableMapOf("name" to nodeConf.myLegalName)
 
