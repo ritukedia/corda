@@ -67,6 +67,7 @@ class NodeMessagingClient(override val config: NodeConfiguration,
         // confusion.
         const val TOPIC_PROPERTY = "platform-topic"
         const val SESSION_ID_PROPERTY = "session-id"
+        val AMQ_DELAY = Integer.valueOf(System.getProperty("AMQ_DELIVERY_DELAY_MS", "0"))
     }
 
     private class InnerState {
@@ -102,12 +103,12 @@ class NodeMessagingClient(override val config: NodeConfiguration,
     }
 
     private val processedMessages: MutableSet<UUID> = Collections.synchronizedSet(
-        object : AbstractJDBCHashSet<UUID, Table>(Table, loadOnInit = true) {
-            override fun elementFromRow(row: ResultRow): UUID = row[table.uuid]
-            override fun addElementToInsert(insert: InsertStatement, entry: UUID, finalizables: MutableList<() -> Unit>) {
-                insert[table.uuid] = entry
-            }
-        })
+            object : AbstractJDBCHashSet<UUID, Table>(Table, loadOnInit = true) {
+                override fun elementFromRow(row: ResultRow): UUID = row[table.uuid]
+                override fun addElementToInsert(insert: InsertStatement, entry: UUID, finalizables: MutableList<() -> Unit>) {
+                    insert[table.uuid] = entry
+                }
+            })
 
     fun start(rpcOps: RPCOps, userService: RPCUserService) {
         state.locked {
@@ -368,6 +369,11 @@ class NodeMessagingClient(override val config: NodeConfiguration,
                     writeBodyBufferBytes(message.data)
                     // Use the magic deduplication property built into Artemis as our message identity too
                     putStringProperty(HDR_DUPLICATE_DETECTION_ID, SimpleString(message.uniqueMessageId.toString()))
+
+                    // For demo purposes - if set then add a delay to messages in order to demonstrate that the flows are doing as intended
+                    if (AMQ_DELAY > 0 && message.topicSession.topic == "platform.session") {
+                        putLongProperty("_AMQ_SCHED_DELIVERY", System.currentTimeMillis() + AMQ_DELAY);
+                    }
                 }
                 log.info("Send to: $mqAddress topic: ${message.topicSession.topic} sessionID: ${message.topicSession.sessionID} " +
                         "uuid: ${message.uniqueMessageId}")
@@ -375,6 +381,7 @@ class NodeMessagingClient(override val config: NodeConfiguration,
             }
         }
     }
+
 
     private fun getMQAddress(target: MessageRecipients): String {
         return if (target == myAddress) {
