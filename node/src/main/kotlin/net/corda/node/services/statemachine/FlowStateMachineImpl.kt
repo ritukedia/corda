@@ -30,7 +30,7 @@ import java.util.concurrent.ExecutionException
 
 class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
                               val logic: FlowLogic<R>,
-                              scheduler: FiberScheduler) : Fiber<Unit>("flow", scheduler), FlowStateMachine<R> {
+                              scheduler: FiberScheduler) : FlowStateMachine<R> {
     companion object {
         // Used to work around a small limitation in Quasar.
         private val QUASAR_UNBLOCKER = run {
@@ -42,7 +42,7 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
         /**
          * Return the current [FlowStateMachineImpl] or null if executing outside of one.
          */
-        fun currentStateMachine(): FlowStateMachineImpl<*>? = Strand.currentStrand() as? FlowStateMachineImpl<*>
+        fun currentStateMachine(): FlowStateMachineImpl<*>? = (Strand.currentStrand() as? StateMachineFiber)?.stateMachine
     }
 
     // These fields shouldn't be serialised, so they are marked @Transient.
@@ -72,15 +72,15 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
         }
     }
 
+    val fiber = StateMachineFiber(id, scheduler)
     internal val openSessions = HashMap<Pair<FlowLogic<*>, Party>, FlowSession>()
 
     init {
         logic.stateMachine = this
-        name = id.toString()
     }
 
     @Suspendable
-    override fun run() {
+    private fun run() {
         createTransaction()
         val result = try {
             logic.call()
@@ -254,7 +254,7 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
         ioRequest.session.waitingForResponse = (ioRequest is ReceiveRequest<*>)
 
         var exceptionDuringSuspend: Throwable? = null
-        parkAndSerialize { fiber, serializer ->
+        Fiber.parkAndSerialize { fiber, serializer ->
             logger.trace { "Suspended on $ioRequest" }
             // restore the Tx onto the ThreadLocal so that we can commit the ensuing checkpoint to the DB
             try {
@@ -265,7 +265,7 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
                 // Quasar does not terminate the fiber properly if an exception occurs during a suspend. We have to
                 // resume the fiber just so that we can throw it when it's running.
                 exceptionDuringSuspend = t
-                resume(scheduler)
+                resume(fiber.scheduler)
             }
         }
 
@@ -281,16 +281,23 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
             if (fromCheckpoint) {
                 logger.info("Resumed from checkpoint")
                 fromCheckpoint = false
-                Fiber.unparkDeserialized(this, scheduler)
-            } else if (state == State.NEW) {
+                Fiber.unparkDeserialized(fiber, scheduler)
+            } else if (fiber.state == Strand.State.NEW) {
                 logger.trace("Started")
-                start()
+                fiber.start()
             } else {
                 logger.trace("Resumed")
-                Fiber.unpark(this, QUASAR_UNBLOCKER)
+                Fiber.unpark(fiber, QUASAR_UNBLOCKER)
             }
         } catch (t: Throwable) {
             logger.error("Error during resume", t)
         }
+    }
+
+    class StateMachineFiber(runId: StateMachineRunId, scheduler: FiberScheduler) : Fiber<Unit>(runId.toString(), scheduler) {
+        @Transient lateinit var stateMachine: FlowStateMachineImpl<*>
+
+        @Suspendable
+        override fun run() = stateMachine.run()
     }
 }
