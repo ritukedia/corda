@@ -206,6 +206,7 @@ class Node(override val configuration: FullNodeConfiguration, networkMapAddress:
         return ServletContextHandler().apply {
             contextPath = "/"
             setAttribute("node", this@Node)
+            setAttribute("storage", storage)
             addServlet(DataUploadServlet::class.java, "/upload/*")
             addServlet(AttachmentDownloadServlet::class.java, "/attachments/*")
 
