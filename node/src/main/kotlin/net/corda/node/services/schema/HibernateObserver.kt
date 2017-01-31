@@ -85,11 +85,15 @@ class HibernateObserver(services: ServiceHubInternal) {
 
     private fun persistStateWithSchema(state: QueryableState, stateRef: StateRef, schema: MappedSchema) {
         val sessionFactory = sessionFactoryForSchema(schema)
-        val session = sessionFactory.openStatelessSession(TransactionManager.current().connection)
+        val session = sessionFactory.openSession()
+        //val session = sessionFactory.openStatelessSession(TransactionManager.current().connection)
         session.use {
             val mappedObject = schemaService.generateMappedObject(state, schema)
             mappedObject.stateRef = PersistentStateRef(stateRef)
-            session.insert(mappedObject)
+            session.beginTransaction()
+            session.save(mappedObject)
+            session.getTransaction().commit()
+            //session.insert(mappedObject)
         }
     }
 
